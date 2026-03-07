@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  ImageBackground,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { theme } from '../Components/theme';
@@ -69,85 +70,96 @@ export default function Login({ navigation }) {
       style={styles.screen}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <LinearGradient colors={[theme.colors.bgA, theme.colors.bgB]} style={styles.bg}>
-        <View style={styles.shell}>
-          <View style={styles.brandRow}>
-            <View style={styles.brandIcon}>
-              <Icon name="gas-cylinder" size={22} color={theme.colors.blue} />
+      <ImageBackground
+        source={require('../Components/Static/ALFLogo.png')}
+        style={styles.bgImage}
+        resizeMode="cover"
+      >
+        <LinearGradient
+          colors={['rgba(15,23,42,0.35)', 'rgba(15,23,42,0.20)', 'rgba(15,23,42,0.45)']}
+          style={styles.overlay}
+        >
+          <View style={styles.content}>
+            <View style={styles.shell}>
+              <View style={styles.brandRow}>
+                <View style={styles.brandIcon}>
+                  <Icon name="gas-cylinder" size={22} color={theme.colors.blue} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.brandTitle}>ALFANAR Gas Level</Text>
+                  <Text style={styles.brandSub}>Control Center</Text>
+                </View>
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.title}>Sign in</Text>
+                <Text style={styles.subtitle}>Use your assigned credentials to continue.</Text>
+
+                <Text style={styles.label}>Username</Text>
+                <View style={styles.inputWrap}>
+                  <Icon name="account" size={20} color={theme.colors.textMuted} />
+                  <TextInput
+                    value={username}
+                    onChangeText={(t) => {
+                      setUsername(t);
+                      if (error) setError('');
+                    }}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={styles.input}
+                    placeholder="Enter username"
+                    placeholderTextColor={theme.colors.textMuted}
+                    editable={!submitting}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.inputWrap}>
+                  <Icon name="lock" size={20} color={theme.colors.textMuted} />
+                  <TextInput
+                    value={password}
+                    onChangeText={(t) => {
+                      setPassword(t);
+                      if (error) setError('');
+                    }}
+                    secureTextEntry
+                    style={styles.input}
+                    placeholder="Enter password"
+                    placeholderTextColor={theme.colors.textMuted}
+                    editable={!submitting}
+                    returnKeyType="done"
+                    onSubmitEditing={() => {
+                      if (canSubmit) onSubmit();
+                    }}
+                  />
+                </View>
+
+                {!!error && <Text style={styles.error}>{error}</Text>}
+
+                <Pressable
+                  style={[styles.btn, !canSubmit && styles.btnDisabled]}
+                  onPress={onSubmit}
+                  disabled={!canSubmit}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Icon name="login" size={20} color="#fff" />
+                      <Text style={styles.btnText}>Sign in</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.brandTitle}>ALFANAR Gas Level</Text>
-              <Text style={styles.brandSub}>Control Center</Text>
+
+            <View style={styles.footerWrap}>
+              <Text style={styles.poweredBy}>Powered By SONIC</Text>
             </View>
           </View>
-
-          <View style={styles.card}>
-            <Text style={styles.title}>Sign in</Text>
-            <Text style={styles.subtitle}>Use your assigned credentials to continue.</Text>
-
-            <Text style={styles.label}>Username</Text>
-            <View style={styles.inputWrap}>
-              <Icon name="account" size={20} color={theme.colors.textMuted} />
-              <TextInput
-                value={username}
-                onChangeText={(t) => {
-                  setUsername(t);
-                  if (error) setError('');
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={styles.input}
-                placeholder="Enter username"
-                placeholderTextColor={theme.colors.textMuted}
-                editable={!submitting}
-                returnKeyType="next"
-              />
-            </View>
-
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrap}>
-              <Icon name="lock" size={20} color={theme.colors.textMuted} />
-              <TextInput
-                value={password}
-                onChangeText={(t) => {
-                  setPassword(t);
-                  if (error) setError('');
-                }}
-                secureTextEntry
-                style={styles.input}
-                placeholder="Enter password"
-                placeholderTextColor={theme.colors.textMuted}
-                editable={!submitting}
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  if (canSubmit) onSubmit();
-                }}
-              />
-            </View>
-
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            <Pressable
-              style={[styles.btn, !canSubmit && styles.btnDisabled]}
-              onPress={onSubmit}
-              disabled={!canSubmit}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Icon name="login" size={20} color="#fff" />
-                  <Text style={styles.btnText}>Sign in</Text>
-                </>
-              )}
-            </Pressable>
-
-            <Text style={styles.footerHint}>
-              Tip: If you can’t sign in, verify network access to the server.
-            </Text>
-          </View>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </ImageBackground>
     </KeyboardAvoidingView>
   );
 }
@@ -157,11 +169,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.bg,
   },
-  bg: {
+  bgImage: {
     flex: 1,
-    justifyContent: 'center',
+  },
+  overlay: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
   shell: {
+    flex: 1,
+    justifyContent: 'center',
     padding: 18,
     gap: 14,
   },
@@ -187,19 +207,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
     fontWeight: '900',
-    color: theme.colors.text,
+    color: '#FFFFFF',
   },
   brandSub: {
     marginTop: 2,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '700',
-    color: theme.colors.textMuted,
+    color: 'rgba(255,255,255,0.92)',
   },
 
   card: {
-    backgroundColor: theme.colors.card,
-    borderColor: theme.colors.border,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderColor: 'rgba(255,255,255,0.35)',
     borderWidth: 1,
     borderRadius: theme.radius.xl,
     padding: 18,
@@ -237,7 +257,7 @@ const styles = StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderColor: theme.colors.stroke,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    backgroundColor: 'rgba(255,255,255,0.96)',
   },
   input: {
     flex: 1,
@@ -278,11 +298,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  footerHint: {
-    marginTop: 14,
-    color: theme.colors.textMuted,
-    fontWeight: '700',
-    fontSize: 13,
-    lineHeight: 18,
+  footerWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 18,
+    paddingBottom: 24,
+  },
+  poweredBy: {
+    textAlign: 'center',
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 16,
+    lineHeight: 22,
   },
 });

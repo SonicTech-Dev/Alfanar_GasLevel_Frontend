@@ -1,46 +1,207 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing } from 'react-native'
 import LinearGradient from 'react-native-linear-gradient'
 import io from 'socket.io-client'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { api } from '../Components/api'
 import { theme } from '../Components/theme'
 import WowCard from '../Components/WowCard'
+import { Icon } from '../Components/icons'
+import { useViewMode } from '../App'
 
-const TERMINAL_ID = '230346'
+function MenuDrawer({
+  open,
+  onClose,
+  onPressDashboard,
+  onPressBrowseView,
+  onPressGasSensors,
+  onToggleBrowseMode,
+  currentRoute = 'GasSensors',
+  viewMode = 'grid',
+}) {
+  const insets = useSafeAreaInsets()
+  const slide = useRef(new Animated.Value(0)).current
 
-function fmtTs(ts) {
-  if (!ts) return '—'
-  const d = new Date(ts)
-  if (isNaN(d.getTime())) return '—'
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: open ? 1 : 0,
+      duration: open ? 220 : 180,
+      easing: open ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start()
+  }, [open, slide])
 
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const pointerEvents = open ? 'auto' : 'none'
+  const panelW = 292
 
-  const dd = String(d.getDate()).padStart(2,'0')
-  const mon = months[d.getMonth()]
-  const yyyy = d.getFullYear()
+  const translateX = slide.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-panelW - 16, 0],
+  })
 
-  let hh = d.getHours()
-  const ampm = hh >= 12 ? 'PM' : 'AM'
-  hh = hh % 12
-  if (hh === 0) hh = 12
+  const dimOpacity = slide.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  })
 
-  const mm = String(d.getMinutes()).padStart(2,'0')
+  const browseLabel = viewMode === 'command' ? 'Command View' : 'Grid View'
+  const browseIcon = viewMode === 'command' ? 'cards-outline' : 'view-comfy'
 
-  return `${dd} ${mon} ${yyyy} • ${hh}:${mm} ${ampm}`
+  const isDashboard = currentRoute === 'Dashboard'
+  const isGridView = currentRoute === 'ListView'
+  const isCommandView = currentRoute === 'CommandView'
+  const isBrowseActive = isGridView || isCommandView
+  const isGasSensors = currentRoute === 'GasSensors'
+
+  return (
+    <View style={styles.drawerRoot} pointerEvents={pointerEvents}>
+      <Animated.View style={[styles.drawerDim, { opacity: dimOpacity }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close menu" />
+      </Animated.View>
+
+      <Animated.View
+        style={[
+          styles.drawerPanel,
+          {
+            paddingTop: Math.max(12, insets.top + 10),
+            transform: [{ translateX }],
+          },
+        ]}
+      >
+        <View style={styles.drawerHeader}>
+          <View style={styles.drawerHeaderIcon}>
+            <Icon name="menu" size={18} color={theme.colors.textSecondary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.drawerTitle}>Menu</Text>
+            <Text style={styles.drawerSub}>App Navigation Panel</Text>
+          </View>
+
+          <Pressable onPress={onClose} style={styles.iconBtn} accessibilityLabel="Close menu">
+            <Icon name="close" size={20} color={theme.colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <View style={{ height: 10 }} />
+
+        <View style={styles.drawerList}>
+          <Pressable
+            onPress={onPressDashboard}
+            style={[styles.menuItem, isDashboard && styles.menuItemActive]}
+            accessibilityLabel="Open Dashboard"
+          >
+            <LinearGradient
+              colors={
+                isDashboard
+                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.menuActiveGlow, !isDashboard && styles.menuActiveGlowHidden]}
+            />
+            <View style={[styles.menuActiveRail, isDashboard && styles.menuActiveRailOn]} />
+            <View style={[styles.menuItemIcon, isDashboard && styles.menuItemIconActive]}>
+              <Icon
+                name="view-dashboard-outline"
+                size={18}
+                color={isDashboard ? theme.colors.blue2 : theme.colors.textSecondary}
+              />
+            </View>
+            <Text style={[styles.menuItemText, isDashboard && styles.menuItemTextActive]}>Dashboard</Text>
+          </Pressable>
+
+          <View style={styles.menuDividerTop} />
+
+          <Pressable
+            onPress={onPressBrowseView}
+            style={[styles.menuItem, isBrowseActive && styles.menuItemActive]}
+            accessibilityLabel={`Open ${browseLabel}`}
+          >
+            <LinearGradient
+              colors={
+                isBrowseActive
+                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.menuActiveGlow, !isBrowseActive && styles.menuActiveGlowHidden]}
+            />
+            <View style={[styles.menuActiveRail, isBrowseActive && styles.menuActiveRailOn]} />
+            <View style={[styles.menuItemIcon, isBrowseActive && styles.menuItemIconActive]}>
+              <Icon
+                name={browseIcon}
+                size={18}
+                color={isBrowseActive ? theme.colors.blue2 : theme.colors.textSecondary}
+              />
+            </View>
+            <Text style={[styles.menuItemText, isBrowseActive && styles.menuItemTextActive]}>{browseLabel}</Text>
+            <View style={{ flex: 1 }} />
+            <Pressable
+              onPress={onToggleBrowseMode}
+              hitSlop={10}
+              style={styles.modeSwitchBtn}
+              accessibilityLabel="Toggle browse mode"
+            >
+              <LinearGradient
+                colors={['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modeSwitchGlow}
+              />
+              <Icon name="autorenew" size={18} color={theme.colors.blue} />
+            </Pressable>
+          </Pressable>
+
+          <View style={styles.menuDividerTop} />
+
+          <Pressable
+            onPress={onPressGasSensors}
+            style={[styles.menuItem, isGasSensors && styles.menuItemActive]}
+            accessibilityLabel="Open Gas Sensor Monitoring"
+          >
+            <LinearGradient
+              colors={
+                isGasSensors
+                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.menuActiveGlow, !isGasSensors && styles.menuActiveGlowHidden]}
+            />
+            <View style={[styles.menuActiveRail, isGasSensors && styles.menuActiveRailOn]} />
+            <View style={[styles.menuItemIcon, isGasSensors && styles.menuItemIconActive]}>
+              <Icon
+                name="cctv"
+                size={18}
+                color={isGasSensors ? theme.colors.blue2 : theme.colors.textSecondary}
+              />
+            </View>
+            <Text style={[styles.menuItemText, isGasSensors && styles.menuItemTextActive]}>Gas Sensor Monitoring</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
+    </View>
+  )
 }
 
-export default function GasSensors() {
+export default function GasSensors({ navigation }) {
+  const insets = useSafeAreaInsets()
+  const { viewMode, toggleViewMode } = useViewMode()
   const [status,setStatus] = useState(null)
   const [socketConnected,setSocketConnected] = useState(false)
   const [error,setError] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const socketRef = useRef(null)
   const pollRef = useRef(null)
 
   async function pollStatus() {
     try {
-      const json = await api.deviceStatus(TERMINAL_ID)
+      const json = await api.deviceStatus('230346')
       setStatus(json)
       setError('')
     } catch (e) {
@@ -88,12 +249,12 @@ export default function GasSensors() {
     })
 
     socket.on('init',(map)=>{
-      const data = map?.[TERMINAL_ID]
+      const data = map?.['230346']
       if (data) setStatus(data)
     })
 
     socket.on('status_update',(payload)=>{
-      if (String(payload?.terminal_id) === TERMINAL_ID) {
+      if (String(payload?.terminal_id) === '230346') {
         setStatus(payload)
       }
     })
@@ -113,34 +274,109 @@ export default function GasSensors() {
   const online = status?.panelOnline === true
   const lel = online ? status?.lel : null
 
-  // Solenoid condition unchanged: On if LEL > 25, else Off.
   const solenoidOn = online && Number(lel) > 25
 
-  // UI color rules
   const gasSensorText = online ? 'Online' : 'Offline'
   const gasSensorColor = online ? theme.colors.green : theme.colors.red
 
   const solenoidText = !online ? '—' : solenoidOn ? 'On' : 'Off'
   const solenoidColor = !online ? theme.colors.textMuted : solenoidOn ? theme.colors.red : theme.colors.green
 
-  // LEL rules:
-  // - if offline -> hidden (because we hide everything underneath)
-  // - <= 25 => green
-  // - > 25 => red
   const lelNum = Number(lel)
   const lelIsNumber = Number.isFinite(lelNum)
   const lelText = !lelIsNumber ? 'N/A' : `${Math.round(lelNum)}%`
   const lelColor = !lelIsNumber ? theme.colors.textMuted : lelNum > 25 ? theme.colors.red : theme.colors.green
 
+  function handleToggleBrowseMode() {
+    toggleViewMode()
+  }
+
+  const headerTopPad = Math.max(12, insets.top + 10)
+
   return (
     <LinearGradient colors={[theme.colors.bgA,theme.colors.bgB]} style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.wrap}>
+      <MenuDrawer
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onPressDashboard={() => {
+          setMenuOpen(false)
+          navigation.navigate('Dashboard')
+        }}
+        onPressBrowseView={() => {
+          setMenuOpen(false)
+          navigation.navigate(viewMode === 'command' ? 'CommandView' : 'ListView')
+        }}
+        onPressGasSensors={() => {
+          setMenuOpen(false)
+        }}
+        onToggleBrowseMode={handleToggleBrowseMode}
+        currentRoute="GasSensors"
+        viewMode={viewMode}
+      />
 
-        <Text style={styles.title}>Gas Sensors</Text>
+      <ScrollView contentContainerStyle={[styles.wrap, { paddingTop: headerTopPad, paddingBottom: 28 }]}>
+        <View style={{ marginBottom: 14 }}>
+          <View style={styles.heroShell}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.84)', 'rgba(255,255,255,0.56)', 'rgba(246,248,251,0.40)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroFrame}
+            >
+              <View style={styles.heroTopLine} />
+              <View style={styles.heroCornerOrb} />
+              <View style={styles.heroLowerGlow} />
 
-        <Text style={styles.realtime}>
-          Realtime: {socketConnected ? 'Connected' : 'Disconnected'}
-        </Text>
+              <View style={styles.heroInner}>
+                <LinearGradient
+                  colors={[
+                    'rgba(214,235,255,0.28)',
+                    'rgba(255,255,255,0.18)',
+                    'rgba(255,255,255,0.04)',
+                  ]}
+                  locations={[0, 0.55, 1]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                />
+
+                <LinearGradient
+                  colors={[
+                    'rgba(255,255,255,0.50)',
+                    'rgba(255,255,255,0.08)',
+                    'rgba(255,255,255,0.00)',
+                  ]}
+                  locations={[0, 0.36, 1]}
+                  start={{ x: 0.05, y: 0 }}
+                  end={{ x: 0.9, y: 1 }}
+                  style={styles.heroSheen}
+                  pointerEvents="none"
+                />
+
+                <View style={styles.heroPlateBorder}>
+                  <View style={styles.heroTopRow}>
+                    <Pressable onPress={() => setMenuOpen(true)} style={styles.heroIconPill} accessibilityLabel="Open menu" hitSlop={10}>
+                      <LinearGradient
+                        colors={['rgba(255,255,255,0.66)', 'rgba(214,235,255,0.22)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <Icon name="menu" size={22} color={theme.colors.textSecondary} />
+                    </Pressable>
+
+                    <View style={styles.heroTitleWrap}>
+                      <Text style={styles.title}>Gas Sensor Monitoring</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.heroBottomRule} />
+                </View>
+              </View>
+            </LinearGradient>
+          </View>
+        </View>
 
         <WowCard style={styles.card}>
           <Text style={styles.site}>Site name: Sonic Testing</Text>
@@ -151,7 +387,6 @@ export default function GasSensors() {
             valueColor={gasSensorColor}
           />
 
-          {/* If Gas Sensor is offline, hide everything underneath it. */}
           {online && (
             <>
               <Row
@@ -198,16 +433,102 @@ const styles = StyleSheet.create({
     gap:16
   },
 
-  title:{
-    fontSize:22,
-    fontWeight:'900',
-    color:theme.colors.text
+  heroShell: {
+    borderRadius: 30,
+    shadowColor: '#0B1220',
+    shadowOpacity: 0.14,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 10,
+  },
+  heroFrame: {
+    borderRadius: 30,
+    padding: 1,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.56)',
+  },
+  heroTopLine: {
+    position: 'absolute',
+    top: 0,
+    left: 22,
+    right: 22,
+    height: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.70)',
+    zIndex: 4,
+  },
+  heroCornerOrb: {
+    position: 'absolute',
+    top: -18,
+    right: -10,
+    width: 130,
+    height: 130,
+    borderRadius: 130,
+    backgroundColor: 'rgba(214,235,255,0.42)',
+    zIndex: 0,
+  },
+  heroLowerGlow: {
+    position: 'absolute',
+    bottom: -30,
+    left: -8,
+    width: 150,
+    height: 90,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    opacity: 0.42,
+    zIndex: 0,
+  },
+  heroInner: {
+    borderRadius: 29,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.46)',
+  },
+  heroSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '78%',
+  },
+  heroPlateBorder: {
+    borderRadius: 29,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.06)',
+    padding: 15,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  heroTitleWrap: { flex: 1, paddingHorizontal: 2 },
+  heroBottomRule: {
+    marginTop: 14,
+    height: 1,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15,23,42,0.08)',
+  },
+  heroIconPill: {
+    width: 48,
+    height: 48,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#0B1220',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
 
-  realtime:{
-    fontSize:12,
-    fontWeight:'700',
-    color:theme.colors.textMuted
+  title:{
+    fontSize:23,
+    lineHeight: 28,
+    fontWeight:'900',
+    color:theme.colors.text,
+    letterSpacing: 0.24,
   },
 
   card:{
@@ -240,6 +561,159 @@ const styles = StyleSheet.create({
   error:{
     color:theme.colors.red,
     fontWeight:'700'
-  }
+  },
+
+  drawerRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9999,
+  },
+  drawerDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15,23,42,0.26)',
+  },
+  drawerPanel: {
+    position: 'absolute',
+    left: 12,
+    top: 0,
+    bottom: 0,
+    width: 292,
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    borderColor: theme.colors.stroke,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    paddingHorizontal: 14,
+    paddingBottom: 16,
+    ...theme.shadow.sheet,
+    zIndex: 10000,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  drawerHeaderIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.stroke,
+    backgroundColor: 'rgba(255,255,255,0.70)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawerTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '900',
+    color: theme.colors.text,
+  },
+  drawerSub: {
+    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '700',
+    color: theme.colors.textMuted,
+  },
+  drawerList: {
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    overflow: 'hidden',
+  },
+  menuItem: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 54,
+    overflow: 'hidden',
+  },
+  menuItemActive: {
+    backgroundColor: 'rgba(214,235,255,0.08)',
+  },
+  menuActiveGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 18,
+  },
+  menuActiveGlowHidden: {
+    opacity: 0,
+  },
+  menuActiveRail: {
+    width: 3,
+    alignSelf: 'stretch',
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+    marginRight: 2,
+  },
+  menuActiveRailOn: {
+    backgroundColor: '#29B6FF',
+    shadowColor: '#29B6FF',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 2,
+  },
+  menuItemIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: theme.colors.stroke,
+    backgroundColor: 'rgba(255,255,255,0.70)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuItemIconActive: {
+    borderColor: 'rgba(41,182,255,0.24)',
+    backgroundColor: 'rgba(214,235,255,0.52)',
+    shadowColor: '#29B6FF',
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  menuItemText: {
+    fontWeight: '900',
+    fontSize: 14,
+    lineHeight: 20,
+    color: theme.colors.text,
+    flexShrink: 1,
+  },
+  menuItemTextActive: {
+    color: '#0B4E8A',
+    letterSpacing: 0.15,
+  },
+  menuDividerTop: {
+    height: 1,
+    backgroundColor: theme.colors.stroke,
+    opacity: 0.9,
+    marginLeft: 12,
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.stroke,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modeSwitchBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(41,182,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  modeSwitchGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
 
 })

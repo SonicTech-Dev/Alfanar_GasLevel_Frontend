@@ -18,9 +18,37 @@ import WowCard from '../Components/WowCard';
 import { SkeletonBlock } from '../Components/Skeleton';
 import { Icon } from '../Components/icons';
 import DeviceBottomSheet from '../Components/DeviceBottomSheet';
+import StatusPill from '../Components/StatusPill';
 import { useViewMode } from '../App';
 
 const POLL_INTERVAL_MS = 30000;
+
+const ACCENTS = {
+  normal: {
+    strong: '#22C55E',
+    dark: '#0F8A43',
+    border: 'rgba(34,197,94,0.22)',
+    soft: 'rgba(34,197,94,0.16)',
+    soft2: 'rgba(236,253,243,0.72)',
+    glow: 'rgba(34,197,94,0.18)',
+  },
+  alarm: {
+    strong: '#DC2626',
+    dark: '#B91C1C',
+    border: 'rgba(220,38,38,0.22)',
+    soft: 'rgba(220,38,38,0.14)',
+    soft2: 'rgba(254,242,242,0.72)',
+    glow: 'rgba(220,38,38,0.16)',
+  },
+  offline: {
+    strong: '#6B7280',
+    dark: '#4B5563',
+    border: 'rgba(107,114,128,0.20)',
+    soft: 'rgba(107,114,128,0.12)',
+    soft2: 'rgba(241,245,249,0.70)',
+    glow: 'rgba(107,114,128,0.14)',
+  },
+};
 
 function parsePercent(valueStr) {
   if (valueStr == null) return null;
@@ -58,50 +86,53 @@ function thresholdStatusForDevice(d) {
 
   if (hasMin && val < min) return 'min';
   if (hasMax && val > max) return 'max';
-
   if (!hasMin && !hasMax) return 'unknown';
   return 'normal';
 }
 
-function gasBarColorsFor(d) {
-  const st = thresholdStatusForDevice(d);
-  if (st === 'offline') return { fill: theme.colors.gray, text: 'rgba(255,255,255,0.96)' };
-  if (st === 'min' || st === 'max') return { fill: theme.colors.red, text: 'rgba(255,255,255,0.96)' };
-  return { fill: theme.colors.green, text: 'rgba(255,255,255,0.96)' };
+function getAccent(type, offline) {
+  if (offline) return ACCENTS.offline;
+  if (type === 'min' || type === 'max') return ACCENTS.alarm;
+  return ACCENTS.normal;
 }
 
-function clamp01(t) {
-  const n = Number(t);
-  if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(1, n));
-}
+function statusVisual(type, offline) {
+  if (offline) {
+    return {
+      shellA: 'rgba(241,245,249,0.95)',
+      shellB: 'rgba(255,255,255,0.82)',
+      fillA: 'rgba(107,114,128,0.72)',
+      fillB: 'rgba(148,163,184,0.86)',
+      glow: 'rgba(107,114,128,0.24)',
+      ring: 'rgba(107,114,128,0.20)',
+      highlight: 'rgba(255,255,255,0.18)',
+      cap: 'rgba(107,114,128,0.30)',
+    };
+  }
 
-function GasLevelCell({ device }) {
-  const offline = deviceIsOffline(device);
-  const pct = offline ? null : Math.max(0, Math.min(100, Number(device.lastValue)));
-  const fillPct = offline ? 0 : clamp01(pct / 100);
+  if (type === 'min' || type === 'max') {
+    return {
+      shellA: 'rgba(255,248,248,0.96)',
+      shellB: 'rgba(255,255,255,0.84)',
+      fillA: 'rgba(220,38,38,0.88)',
+      fillB: 'rgba(248,113,113,0.96)',
+      glow: 'rgba(220,38,38,0.28)',
+      ring: 'rgba(220,38,38,0.22)',
+      highlight: 'rgba(255,255,255,0.20)',
+      cap: 'rgba(220,38,38,0.26)',
+    };
+  }
 
-  const { fill } = gasBarColorsFor(device);
-  const display = offline ? 'N/A' : `${Math.round(pct)}%`;
-
-  return (
-    <View style={styles.gasWrap}>
-      <View style={styles.gasBarOuter}>
-        <View style={[styles.gasBarFill, { width: `${Math.round(fillPct * 100)}%`, backgroundColor: fill }]} />
-        <Text style={[styles.gasBarText, { color: '#000' }]} numberOfLines={1}>
-          {display}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-function ListHeader() {
-  return (
-    <View style={styles.headerRowB}>
-      <Text style={styles.hCellTextBLeft}>Device</Text>
-    </View>
-  );
+  return {
+    shellA: 'rgba(255,255,255,0.96)',
+    shellB: 'rgba(255,255,255,0.84)',
+    fillA: 'rgba(11,143,62,0.86)',
+    fillB: 'rgba(34,197,94,0.98)',
+    glow: 'rgba(34,197,94,0.24)',
+    ring: 'rgba(34,197,94,0.18)',
+    highlight: 'rgba(255,255,255,0.20)',
+    cap: 'rgba(34,197,94,0.24)',
+  };
 }
 
 function MenuDrawer({
@@ -111,8 +142,8 @@ function MenuDrawer({
   onPressBrowseView,
   onPressGasSensors,
   onToggleBrowseMode,
-  currentRoute = 'ListView',
-  viewMode = 'grid',
+  currentRoute = 'CommandView',
+  viewMode = 'command',
 }) {
   const insets = useSafeAreaInsets();
   const slide = useRef(new Animated.Value(0)).current;
@@ -143,9 +174,9 @@ function MenuDrawer({
   const browseIcon = viewMode === 'command' ? 'cards-outline' : 'view-comfy';
 
   const isDashboard = currentRoute === 'Dashboard';
-  const isGridView = currentRoute === 'ListView';
   const isCommandView = currentRoute === 'CommandView';
-  const isBrowseActive = isGridView || isCommandView;
+  const isGridView = currentRoute === 'ListView';
+  const isBrowseActive = isCommandView || isGridView;
   const isGasSensors = currentRoute === 'GasSensors';
 
   return (
@@ -188,7 +219,7 @@ function MenuDrawer({
             <LinearGradient
               colors={
                 isDashboard
-                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
                   : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
               }
               start={{ x: 0, y: 0 }}
@@ -200,7 +231,7 @@ function MenuDrawer({
               <Icon
                 name="view-dashboard-outline"
                 size={18}
-                color={isDashboard ? theme.colors.blue2 : theme.colors.textSecondary}
+                color={isDashboard ? ACCENTS.normal.strong : theme.colors.textSecondary}
               />
             </View>
             <Text style={[styles.menuItemText, isDashboard && styles.menuItemTextActive]}>Dashboard</Text>
@@ -216,7 +247,7 @@ function MenuDrawer({
             <LinearGradient
               colors={
                 isBrowseActive
-                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
                   : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
               }
               start={{ x: 0, y: 0 }}
@@ -228,7 +259,7 @@ function MenuDrawer({
               <Icon
                 name={browseIcon}
                 size={18}
-                color={isBrowseActive ? theme.colors.blue2 : theme.colors.textSecondary}
+                color={isBrowseActive ? ACCENTS.normal.strong : theme.colors.textSecondary}
               />
             </View>
             <Text style={[styles.menuItemText, isBrowseActive && styles.menuItemTextActive]}>{browseLabel}</Text>
@@ -240,12 +271,12 @@ function MenuDrawer({
               accessibilityLabel="Toggle browse mode"
             >
               <LinearGradient
-                colors={['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)']}
+                colors={['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.14)']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.modeSwitchGlow}
               />
-              <Icon name="autorenew" size={18} color={theme.colors.blue} />
+              <Icon name="autorenew" size={18} color={ACCENTS.normal.strong} />
             </Pressable>
           </Pressable>
 
@@ -259,7 +290,7 @@ function MenuDrawer({
             <LinearGradient
               colors={
                 isGasSensors
-                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
                   : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
               }
               start={{ x: 0, y: 0 }}
@@ -271,7 +302,7 @@ function MenuDrawer({
               <Icon
                 name="cctv"
                 size={18}
-                color={isGasSensors ? theme.colors.blue2 : theme.colors.textSecondary}
+                color={isGasSensors ? ACCENTS.normal.strong : theme.colors.textSecondary}
               />
             </View>
             <Text style={[styles.menuItemText, isGasSensors && styles.menuItemTextActive]}>Gas Sensor Monitoring</Text>
@@ -282,7 +313,64 @@ function MenuDrawer({
   );
 }
 
-export default function ListView({ navigation }) {
+function TankLevelVisual({ value, offline, type }) {
+  const pct = offline ? 0 : Math.max(0, Math.min(100, Number(value || 0)));
+  const fillHeight = `${pct}%`;
+  const visual = statusVisual(type, offline);
+
+  return (
+    <View style={styles.tankFrame}>
+      <View style={[styles.tankAura, { backgroundColor: visual.glow }]} />
+      <View style={[styles.tankTopCap, { backgroundColor: visual.cap }]} />
+      <LinearGradient
+        colors={[visual.shellA, visual.shellB]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.tankBody, { borderColor: visual.ring }]}
+      >
+        <LinearGradient
+          colors={[visual.fillA, visual.fillB]}
+          start={{ x: 0.2, y: 1 }}
+          end={{ x: 0.8, y: 0 }}
+          style={[styles.tankFill, { height: fillHeight }]}
+        />
+        <LinearGradient
+          colors={[visual.highlight, 'rgba(255,255,255,0.02)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.tankGloss}
+        />
+        <View style={[styles.tankInnerRing, { borderColor: visual.ring }]} />
+        <Text style={styles.tankPercentText}>{offline ? 'N/A' : `${Math.round(pct)}%`}</Text>
+      </LinearGradient>
+    </View>
+  );
+}
+
+function MetricBadge({ value, label, accent, textColor, isTankType = false }) {
+  return (
+    <LinearGradient
+      colors={[accent, 'rgba(255,255,255,0.12)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.metricBadge}
+    >
+      <Text
+        style={[
+          styles.metricBadgeValue,
+          { color: textColor },
+          isTankType && styles.metricBadgeValueTankType,
+        ]}
+        numberOfLines={2}
+      >
+        {value}
+      </Text>
+      <Text style={styles.metricBadgeLabel}>{label}</Text>
+    </LinearGradient>
+  );
+}
+
+export default function CommandView({ navigation }) {
   const insets = useSafeAreaInsets();
   const pollRef = useRef(null);
   const sheetRef = useRef(null);
@@ -320,7 +408,6 @@ export default function ListView({ navigation }) {
 
       out.push({
         terminal_id: tid,
-
         title: (t && t.tank_title) || '',
         sn: (t && t.sn) || '',
         site: s.site || '',
@@ -334,7 +421,6 @@ export default function ListView({ navigation }) {
 
         afg_bld_code: i?.afg_bld_code || '',
         client_bld_code: i?.client_bld_code || '',
-
         lpg_tank_type: i?.lpg_tank_type || '',
         lpg_installation_type: i?.lpg_installation_type || '',
 
@@ -388,7 +474,7 @@ export default function ListView({ navigation }) {
   }
 
   useEffect(() => {
-    setViewMode('grid');
+    setViewMode('command');
   }, [setViewMode]);
 
   useEffect(() => {
@@ -397,7 +483,7 @@ export default function ListView({ navigation }) {
         setLoadingFirst(true);
         await fullLoad({ keepSelection: true });
       } catch (e) {
-        setError(e?.message || 'Failed to load list view.');
+        setError(e?.message || 'Failed to load command view.');
       } finally {
         setLoadingFirst(false);
       }
@@ -439,10 +525,8 @@ export default function ListView({ navigation }) {
 
   function handleToggleBrowseMode() {
     toggleViewMode();
-    navigation.replace('CommandView');
+    navigation.replace('ListView');
   }
-
-  const keyExtractor = (item) => String(item.terminal_id);
 
   const headerTopPad = Math.max(12, insets.top + 10);
   const listBottomPad = Math.max(24, insets.bottom + 24) + 100;
@@ -464,7 +548,7 @@ export default function ListView({ navigation }) {
           navigation.navigate('GasSensors');
         }}
         onToggleBrowseMode={handleToggleBrowseMode}
-        currentRoute="ListView"
+        currentRoute="CommandView"
         viewMode={viewMode}
       />
 
@@ -484,7 +568,7 @@ export default function ListView({ navigation }) {
               <View style={styles.heroInner}>
                 <LinearGradient
                   colors={[
-                    'rgba(214,235,255,0.28)',
+                    'rgba(236,253,243,0.28)',
                     'rgba(255,255,255,0.18)',
                     'rgba(255,255,255,0.04)',
                   ]}
@@ -512,16 +596,16 @@ export default function ListView({ navigation }) {
                   <View style={styles.heroTopRow}>
                     <Pressable onPress={() => setMenuOpen(true)} style={styles.heroIconPill} accessibilityLabel="Open menu" hitSlop={10}>
                       <LinearGradient
-                        colors={['rgba(255,255,255,0.66)', 'rgba(214,235,255,0.22)']}
+                        colors={['rgba(255,255,255,0.66)', 'rgba(236,253,243,0.22)']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
+                        style={styles.heroIconPillGlow}
                       />
                       <Icon name="menu" size={22} color={theme.colors.textSecondary} />
                     </Pressable>
 
                     <View style={styles.heroTitleWrap}>
-                      <Text style={styles.heroTitle}>Grid View</Text>
+                      <Text style={styles.heroTitle}>Command View</Text>
                     </View>
                   </View>
 
@@ -534,7 +618,7 @@ export default function ListView({ navigation }) {
 
         {!!error && (
           <WowCard
-            gradient={['rgba(254,242,242,0.80)', 'rgba(255,255,255,0.72)']}
+            gradient={['rgba(254,242,242,0.82)', 'rgba(255,255,255,0.74)']}
             stroke="rgba(220,38,38,0.22)"
             style={{ marginBottom: 12 }}
           >
@@ -543,95 +627,150 @@ export default function ListView({ navigation }) {
           </WowCard>
         )}
 
-        <WowCard
-          stroke={theme.colors.stroke2}
-          gradient={['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.70)']}
-          style={{ flex: 1 }}
-        >
-          <View style={styles.tableHeaderRow}>
-            <Text style={styles.tableTitle}>Devices</Text>
-            <View style={{ flex: 1 }} />
-            <View style={styles.countPill}>
-              <Text style={styles.countPillText}>{devices.length} total</Text>
-            </View>
+        {loadingFirst ? (
+          <View style={{ gap: 12 }}>
+            <SkeletonBlock height={210} width="100%" radius={28} />
+            <SkeletonBlock height={210} width="100%" radius={28} />
+            <SkeletonBlock height={210} width="100%" radius={28} />
           </View>
+        ) : (
+          <FlatList
+            data={devices}
+            keyExtractor={(item) => String(item.terminal_id)}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            contentContainerStyle={{ paddingBottom: listBottomPad, gap: 14 }}
+            renderItem={({ item }) => {
+              const type = thresholdStatusForDevice(item);
+              const offline = deviceIsOffline(item);
+              const pillType = offline ? 'offline' : type;
+              const statusText =
+                pillType === 'offline'
+                  ? 'Offline'
+                  : type === 'min'
+                    ? 'Low Alarm'
+                    : type === 'max'
+                      ? 'High Alarm'
+                      : type === 'normal'
+                        ? 'Normal'
+                        : 'Unknown';
 
-          <View style={{ height: 10 }} />
+              const accent = getAccent(type, offline);
 
-          {loadingFirst ? (
-            <View style={{ paddingBottom: 8 }}>
-              <SkeletonBlock height={14} width="42%" radius={10} />
-              <View style={{ height: 10 }} />
-              <SkeletonBlock height={62} width="100%" radius={18} />
-              <View style={{ height: 10 }} />
-              <SkeletonBlock height={62} width="100%" radius={18} />
-              <View style={{ height: 10 }} />
-              <SkeletonBlock height={62} width="100%" radius={18} />
-            </View>
-          ) : (
-            <View style={styles.tableOuter}>
-              <FlatList
-                data={devices}
-                keyExtractor={keyExtractor}
-                ListHeaderComponent={<ListHeader />}
-                renderItem={({ item, index }) => {
-                  const rowBg = index % 2 === 0 ? 'rgba(255,255,255,0.50)' : 'rgba(255,255,255,0.34)';
-                  const isLast = index === devices.length - 1;
+              const cardAccent = accent.soft;
+              const cardStroke = accent.border;
+              const metricTint = accent.soft;
+              const actionTint = accent.soft2;
+              const locationTintA = accent.soft2;
+              const locationTintB = accent.soft;
 
-                  return (
-                    <Pressable
-                      onPress={() => onPressRow(item)}
-                      style={[
-                        styles.rowCard,
-                        { backgroundColor: rowBg },
-                        !isLast && styles.rowCardBorder,
-                        isLast && styles.rowCardLastBorder,
-                      ]}
+              return (
+                <Pressable onPress={() => onPressRow(item)}>
+                  <View style={[styles.commandShell, { shadowColor: accent.strong }]}>
+                    <LinearGradient
+                      colors={['rgba(255,255,255,0.98)', 'rgba(255,255,255,0.84)', 'rgba(248,250,252,0.72)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={[styles.commandCard, { borderColor: cardStroke }]}
                     >
-                      <View style={styles.rowTop}>
-                        <View style={styles.rowTopLeft}>
-                          <Text style={styles.deviceTitle}>{deviceName(item)}</Text>
-                          <Text style={styles.deviceSub}>SN {item.sn || '—'}</Text>
+                      <LinearGradient
+                        colors={[cardAccent, 'rgba(255,255,255,0.00)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.commandAmbientGlow}
+                      />
+
+                      <View style={styles.commandTopRow}>
+                        <View style={[styles.commandHeroIcon, { borderColor: accent.border }]}>
+                          <LinearGradient
+                            colors={[accent.soft2, 'rgba(255,255,255,0.22)']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.commandHeroIconGlow}
+                          />
+                          <Icon name="gas-cylinder" size={20} color={accent.strong} />
                         </View>
 
-                        <View style={styles.rowTopRight}>
-                          <Text style={styles.gasBlockTitle}>Gas level</Text>
-                          <GasLevelCell device={item} />
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.commandTitle} numberOfLines={2}>
+                            {deviceName(item)}
+                          </Text>
+                          <Text style={styles.commandSub}>SN {item.sn || '—'}</Text>
+                        </View>
+
+                        <StatusPill type={pillType} text={statusText} />
+                      </View>
+
+                      <View style={styles.commandMiddleRow}>
+                        <View style={styles.commandLeftCol}>
+                          <LinearGradient
+                            colors={[locationTintA, locationTintB]}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={[styles.locationCard, { borderColor: accent.border }]}
+                          >
+                            <Text style={styles.locationLabel}>Location</Text>
+                            <Text style={styles.locationTitle}>{item.emirate || '—'}</Text>
+                            <Text style={styles.locationSub} numberOfLines={2}>
+                              {item.address || '—'}
+                            </Text>
+                          </LinearGradient>
+
+                          <View style={styles.metricsRow}>
+                            <MetricBadge
+                              value={item.project_code || '—'}
+                              label="Project Code"
+                              accent={metricTint}
+                              textColor={accent.dark}
+                            />
+                            <MetricBadge
+                              value={item.afg_bld_code || '—'}
+                              label="AFG Code"
+                              accent={metricTint}
+                              textColor={accent.dark}
+                            />
+                          </View>
+
+                          <View style={styles.metricsRow}>
+                            <MetricBadge
+                              value={item.client_bld_code || '—'}
+                              label="Client Code"
+                              accent={metricTint}
+                              textColor={accent.dark}
+                            />
+                            <MetricBadge
+                              value={item.lpg_tank_type || '—'}
+                              label="Tank Type"
+                              accent={metricTint}
+                              textColor={accent.dark}
+                              isTankType
+                            />
+                          </View>
+                        </View>
+
+                        <View style={styles.commandRightCol}>
+                          <TankLevelVisual value={item.lastValue} offline={offline} type={type} />
+                          <Text style={styles.visualCaption}>Current Level</Text>
+
+                          <LinearGradient
+                            colors={[actionTint, 'rgba(255,255,255,0.34)']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={[styles.actionOrb, { borderColor: accent.border, shadowColor: accent.strong }]}
+                          >
+                            <Icon name="arrow-top-right-thick" size={20} color={accent.strong} />
+                          </LinearGradient>
                         </View>
                       </View>
 
-                      <View style={styles.rowMiddle}>
-                        <Text style={styles.locTitle}>{item.emirate || '—'}</Text>
-                        <Text style={styles.locSub}>{item.address || '—'}</Text>
-                      </View>
-
-                      <View style={styles.rowBottom}>
-                        <View style={styles.bottomCol}>
-                          <Text style={styles.blockTitle}>Codes</Text>
-                          <Text style={styles.blockLine}>{item.project_code || '—'}</Text>
-                          <Text style={styles.blockMuted}>AFG {item.afg_bld_code || '—'}</Text>
-                          <Text style={styles.blockMuted}>Client {item.client_bld_code || '—'}</Text>
-                        </View>
-
-                        <View style={styles.bottomDivider} />
-
-                        <View style={styles.bottomCol}>
-                          <Text style={styles.blockTitle}>Tank</Text>
-                          <Text style={styles.blockLine}>{item.lpg_tank_type || '—'}</Text>
-                          <Text style={styles.blockMuted}>{item.lpg_installation_type || '—'}</Text>
-                        </View>
-                      </View>
-                    </Pressable>
-                  );
-                }}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-                contentContainerStyle={{ paddingBottom: listBottomPad }}
-                showsVerticalScrollIndicator
-                nestedScrollEnabled
-              />
-            </View>
-          )}
-        </WowCard>
+                      <View style={[styles.bottomLuxuryRule, { backgroundColor: accent.glow }]} />
+                    </LinearGradient>
+                  </View>
+                </Pressable>
+              );
+            }}
+            showsVerticalScrollIndicator
+          />
+        )}
       </View>
 
       <DeviceBottomSheet sheetRef={sheetRef} device={selectedDevice} consumptionRow={null} onClose={() => {}} />
@@ -675,7 +814,7 @@ const styles = StyleSheet.create({
     width: 130,
     height: 130,
     borderRadius: 130,
-    backgroundColor: 'rgba(214,235,255,0.42)',
+    backgroundColor: 'rgba(236,253,243,0.46)',
     zIndex: 0,
   },
   heroLowerGlow: {
@@ -708,6 +847,7 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
+
   heroTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroTitleWrap: { flex: 1, paddingHorizontal: 2 },
   heroTitle: {
@@ -723,6 +863,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(15,23,42,0.08)',
   },
+
   heroIconPill: {
     width: 48,
     height: 48,
@@ -739,187 +880,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 6,
   },
+  heroIconPillGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
 
   errTitle: { color: theme.colors.red, fontWeight: '900', marginBottom: 6, fontSize: 15, lineHeight: 22 },
   errText: { color: theme.colors.textMuted, fontWeight: '700', fontSize: 13, lineHeight: 18 },
-
-  tableHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tableTitle: { fontSize: 16, lineHeight: 22, fontWeight: '900', color: theme.colors.text },
-  countPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.stroke,
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minHeight: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countPillText: { fontSize: 12, lineHeight: 16, fontWeight: '900', color: theme.colors.textMuted },
-
-  tableOuter: {
-    borderRadius: theme.radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.62)',
-    overflow: 'hidden',
-  },
-
-  headerRowB: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.stroke,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  hCellTextBLeft: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '900',
-    color: theme.colors.textMuted,
-    letterSpacing: 0.1,
-  },
-
-  rowCard: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-
-  rowCardBorder: {
-    borderBottomWidth: 2,
-    borderBottomColor: 'rgba(15,23,42,0.30)',
-  },
-
-  rowCardLastBorder: {
-    borderBottomWidth: 3,
-    borderBottomColor: 'rgba(15,23,42,0.45)',
-  },
-
-  rowTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  rowTopLeft: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  rowTopRight: {
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-
-  deviceTitle: {
-    fontWeight: '900',
-    color: theme.colors.text,
-    fontSize: 14,
-    lineHeight: 18,
-    flexShrink: 1,
-  },
-  deviceSub: {
-    marginTop: 5,
-    fontWeight: '800',
-    color: theme.colors.textMuted,
-    fontSize: 11.5,
-    lineHeight: 15,
-    flexShrink: 1,
-  },
-
-  rowMiddle: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(15,23,42,0.06)',
-  },
-  locTitle: {
-    fontWeight: '900',
-    color: theme.colors.textSecondary,
-    fontSize: 12.5,
-    lineHeight: 16,
-    flexShrink: 1,
-  },
-  locSub: {
-    marginTop: 5,
-    fontWeight: '800',
-    color: theme.colors.textMuted,
-    fontSize: 11.5,
-    lineHeight: 15,
-    flexShrink: 1,
-  },
-
-  rowBottom: {
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(15,23,42,0.06)',
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  bottomCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  bottomDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    backgroundColor: 'rgba(15,23,42,0.06)',
-    marginHorizontal: 10,
-  },
-
-  blockTitle: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '900',
-    color: theme.colors.textMuted,
-    letterSpacing: 0.1,
-    marginBottom: 6,
-  },
-  blockLine: {
-    fontWeight: '900',
-    color: theme.colors.textSecondary,
-    fontSize: 11.5,
-    lineHeight: 15,
-    flexShrink: 1,
-  },
-  blockMuted: {
-    marginTop: 5,
-    fontWeight: '800',
-    color: theme.colors.textMuted,
-    fontSize: 11.5,
-    lineHeight: 15,
-    flexShrink: 1,
-  },
-
-  gasBlockTitle: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '900',
-    color: theme.colors.textMuted,
-    letterSpacing: 0.1,
-    marginBottom: 6,
-    textAlign: 'center',
-    alignSelf: 'center',
-  },
-
-  gasWrap: {
-    width: 150,
-    maxWidth: 170,
-    alignSelf: 'flex-start',
-  },
-  gasBarOuter: {
-    height: 24,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(15,23,42,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  gasBarFill: { ...StyleSheet.absoluteFillObject, borderRadius: 999, opacity: 0.92 },
-  gasBarText: { alignSelf: 'center', fontWeight: '900', fontSize: 11.5, lineHeight: 14, letterSpacing: 0.2 },
 
   drawerRoot: {
     ...StyleSheet.absoluteFillObject,
@@ -990,7 +956,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   menuItemActive: {
-    backgroundColor: 'rgba(214,235,255,0.08)',
+    backgroundColor: 'rgba(236,253,243,0.18)',
   },
   menuActiveGlow: {
     ...StyleSheet.absoluteFillObject,
@@ -1007,8 +973,8 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   menuActiveRailOn: {
-    backgroundColor: '#29B6FF',
-    shadowColor: '#29B6FF',
+    backgroundColor: ACCENTS.normal.strong,
+    shadowColor: ACCENTS.normal.strong,
     shadowOpacity: 0.35,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 0 },
@@ -1025,9 +991,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   menuItemIconActive: {
-    borderColor: 'rgba(41,182,255,0.24)',
-    backgroundColor: 'rgba(214,235,255,0.52)',
-    shadowColor: '#29B6FF',
+    borderColor: ACCENTS.normal.border,
+    backgroundColor: 'rgba(236,253,243,0.72)',
+    shadowColor: ACCENTS.normal.strong,
     shadowOpacity: 0.14,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
@@ -1041,7 +1007,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   menuItemTextActive: {
-    color: '#0B4E8A',
+    color: '#166534',
     letterSpacing: 0.15,
   },
   menuDividerTop: {
@@ -1065,12 +1031,239 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(41,182,255,0.22)',
+    borderColor: ACCENTS.normal.border,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   modeSwitchGlow: {
     ...StyleSheet.absoluteFillObject,
+  },
+
+  commandShell: {
+    borderRadius: 30,
+    shadowOpacity: 0.16,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 10,
+  },
+  commandCard: {
+    borderRadius: 30,
+    borderWidth: 1,
+    padding: 16,
+    overflow: 'hidden',
+    minHeight: 228,
+  },
+  commandAmbientGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  commandTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 16,
+  },
+  commandHeroIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 18,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  commandHeroIconGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  commandTitle: {
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: '900',
+    color: theme.colors.text,
+    letterSpacing: 0.1,
+  },
+  commandSub: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
+    color: theme.colors.textMuted,
+  },
+
+  commandMiddleRow: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'stretch',
+  },
+  commandLeftCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  commandRightCol: {
+    width: 108,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 2,
+  },
+
+  locationCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 13,
+  },
+  locationLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+    color: theme.colors.textMuted,
+    marginBottom: 6,
+    letterSpacing: 0.2,
+  },
+  locationTitle: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '900',
+    color: theme.colors.textSecondary,
+  },
+  locationSub: {
+    marginTop: 5,
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: '800',
+    color: theme.colors.textMuted,
+  },
+
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  metricBadge: {
+    flex: 1,
+    minHeight: 70,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.06)',
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    justifyContent: 'center',
+  },
+  metricBadgeValue: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: '900',
+  },
+  metricBadgeValueTankType: {
+    fontSize: 10.5,
+    lineHeight: 13,
+    fontWeight: '900',
+  },
+  metricBadgeLabel: {
+    marginTop: 6,
+    fontSize: 10.5,
+    lineHeight: 13,
+    fontWeight: '900',
+    color: theme.colors.textMuted,
+    letterSpacing: 0.15,
+  },
+
+  tankFrame: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  tankAura: {
+    position: 'absolute',
+    width: 98,
+    height: 148,
+    borderRadius: 30,
+    opacity: 0.9,
+    transform: [{ scale: 1.04 }],
+  },
+  tankTopCap: {
+    width: 34,
+    height: 8,
+    borderTopLeftRadius: 7,
+    borderTopRightRadius: 7,
+    marginBottom: 5,
+  },
+  tankBody: {
+    width: 74,
+    height: 138,
+    borderRadius: 24,
+    borderWidth: 1,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: '#0B1220',
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  tankFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  tankGloss: {
+    position: 'absolute',
+    top: 8,
+    bottom: 8,
+    left: 8,
+    width: 14,
+    borderRadius: 999,
+  },
+  tankInnerRing: {
+    position: 'absolute',
+    left: 7,
+    right: 7,
+    top: 7,
+    bottom: 7,
+    borderRadius: 18,
+    borderWidth: 1,
+    opacity: 0.45,
+  },
+  tankPercentText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '900',
+    color: theme.colors.text,
+    marginBottom: 12,
+    zIndex: 2,
+  },
+  visualCaption: {
+    marginTop: 10,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '900',
+    color: theme.colors.textMuted,
+    letterSpacing: 0.15,
+  },
+
+  actionOrb: {
+    width: 42,
+    height: 42,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+    overflow: 'hidden',
+  },
+
+  bottomLuxuryRule: {
+    marginTop: 14,
+    height: 1,
+    borderRadius: 999,
   },
 });

@@ -23,11 +23,10 @@ import OsmMap from '../Components/OsmMap';
 import { SkeletonBlock, SkeletonCard } from '../Components/Skeleton';
 import DeviceBottomSheet, { ConsumptionChartSection } from '../Components/DeviceBottomSheet';
 import { Icon } from '../Components/icons';
+import { useViewMode } from '../App';
 
-// Optional premium blur (degrades gracefully if not installed)
 let BlurView = null;
 try {
-  // eslint-disable-next-line global-require
   BlurView = require('@react-native-community/blur').BlurView;
 } catch {}
 
@@ -108,24 +107,15 @@ function EmptyRow({ text }) {
   );
 }
 
-/* ---------------------------
-   TOTAL GAS AVAILABLE (Liters)
-   (ported from attached web dashboard.js logic)
-   --------------------------- */
-
-// Robust capacity parser: accepts "2000", "2,000", "2000 L", "2,000 liters", etc.
-// Returns numeric liters or null if missing/unparseable/<=0.
 function parseCapacityLiters(value) {
   if (value == null) return null;
   const raw = String(value).trim();
   if (!raw) return null;
 
-  // Extract first number-like token
   const tokenMatch = raw.match(/-?[\d][\d\s,\.]*/);
   if (!tokenMatch) return null;
   let token = tokenMatch[0].replace(/\s+/g, '');
 
-  // If token looks like decimal comma (e.g., "2000,5" and no dots), convert comma to dot.
   if (token.includes(',') && !token.includes('.')) {
     const commas = (token.match(/,/g) || []).length;
     if (commas === 1) {
@@ -136,7 +126,6 @@ function parseCapacityLiters(value) {
       token = token.replace(/,/g, '');
     }
   } else {
-    // Has dot (or no comma): remove commas as thousands separators
     token = token.replace(/,/g, '');
   }
 
@@ -145,7 +134,6 @@ function parseCapacityLiters(value) {
   return n;
 }
 
-// Returns { totalLiters: number|null, includedCount: number, skippedCount: number }
 function computeTotalGasAvailableLiters(devicesList = []) {
   let total = 0;
   let included = 0;
@@ -155,14 +143,13 @@ function computeTotalGasAvailableLiters(devicesList = []) {
     const level = d?.lastValue;
     if (level == null || !Number.isFinite(level)) {
       skipped++;
-      return; // skip offline/unknown
+      return;
     }
 
-    // NOTE: in the RN app, capacity comes from tank-info as lpg_tank_capacity (string-ish)
     const cap = parseCapacityLiters(d?.lpg_tank_capacity);
     if (cap == null || !Number.isFinite(cap) || cap <= 0) {
       skipped++;
-      return; // skip missing/unparseable capacity
+      return;
     }
 
     const litersForDevice = cap * (Number(level) / 100);
@@ -180,9 +167,6 @@ function computeTotalGasAvailableLiters(devicesList = []) {
 }
 
 function formatLiters(n) {
-  // Professional display:
-  // - >= 1000 => whole liters with separators
-  // - < 1000 => 1 decimal
   try {
     const abs = Math.abs(Number(n));
     if (!Number.isFinite(abs)) return '—';
@@ -196,27 +180,20 @@ function formatLiters(n) {
   }
 }
 
-/**
- * Drawer-style menu that slides in from the left edge.
- * - Tap outside to close
- * - Overlays cleanly without breaking scroll
- *
- * UPDATED:
- * - Summary / Devices / Consumption are now children under an expandable "Dashboard" group.
- * - NEW: "List view" is a top-level item that navigates immediately.
- */
 function MenuDrawer({
   open,
   onClose,
   onPressSummary,
   onPressDevices,
   onPressConsumption,
-  onPressListView,
+  onPressBrowseView,
   onPressGasSensors,
+  onToggleBrowseMode,
+  currentRoute = 'Dashboard',
+  viewMode = 'grid',
 }) {
   const insets = useSafeAreaInsets();
   const slide = useRef(new Animated.Value(0)).current;
-
   const [dashOpen, setDashOpen] = useState(true);
 
   useEffect(() => {
@@ -227,11 +204,10 @@ function MenuDrawer({
       useNativeDriver: true,
     }).start();
 
-    // When opening the drawer, default the group to expanded (nice UX).
-    if (open) setDashOpen(true);
-  }, [open, slide]);
+    if (open && currentRoute === 'Dashboard') setDashOpen(true);
+    if (open && currentRoute !== 'Dashboard') setDashOpen(false);
+  }, [open, slide, currentRoute]);
 
-  // Keep mounted to allow close animation; disable pointer events when closed.
   const pointerEvents = open ? 'auto' : 'none';
 
   const panelW = 292;
@@ -246,8 +222,17 @@ function MenuDrawer({
   });
 
   function toggleDashboard() {
-    setDashOpen((v) => !v);
+    if (currentRoute === 'Dashboard') setDashOpen((v) => !v);
   }
+
+  const browseLabel = viewMode === 'command' ? 'Command View' : 'Grid View';
+  const browseIcon = viewMode === 'command' ? 'cards-outline' : 'view-comfy';
+
+  const isDashboard = currentRoute === 'Dashboard';
+  const isGridView = currentRoute === 'ListView';
+  const isCommandView = currentRoute === 'CommandView';
+  const isBrowseActive = isGridView || isCommandView;
+  const isGasSensors = currentRoute === 'GasSensors';
 
   return (
     <View style={styles.drawerRoot} pointerEvents={pointerEvents}>
@@ -270,7 +255,7 @@ function MenuDrawer({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.drawerTitle}>Menu</Text>
-            <Text style={styles.drawerSub}>Dashboard Navigation Tools.</Text>
+            <Text style={styles.drawerSub}>App Navigation Panel</Text>
           </View>
 
           <Pressable onPress={onClose} style={styles.iconBtn} accessibilityLabel="Close menu">
@@ -281,45 +266,37 @@ function MenuDrawer({
         <View style={{ height: 10 }} />
 
         <View style={styles.drawerList}>
-          {/* NEW: Top-level List view (not expandable) */}
-          <Pressable onPress={onPressListView} style={styles.menuItem} accessibilityLabel="Open List view">
-            <View style={styles.menuItemIcon}>
-              <Icon name="table" size={18} color={theme.colors.textSecondary} />
-            </View>
-            <Text style={styles.menuItemText}>List view</Text>
-            <View style={{ flex: 1 }} />
-            <Icon name="chevron-right" size={18} color={theme.colors.textMuted} />
-          </Pressable>
-
-          {/* NEW: Gas Sensors button (top-level, immediate navigation) */}
           <Pressable
-            style={{
-              marginTop: 16,
-              padding: 14,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: theme.colors.stroke,
-            }}
-            onPress={onPressGasSensors}
-            accessibilityLabel="Open Gas Sensors"
+            onPress={toggleDashboard}
+            style={[styles.menuItem, isDashboard && styles.menuItemActive]}
+            accessibilityLabel="Dashboard section"
           >
-            <Text style={{ fontWeight: '900', color: theme.colors.text }}>Gas Sensors</Text>
-          </Pressable>
-
-          <View style={styles.menuDividerTop} />
-
-          {/* Parent group */}
-          <Pressable onPress={toggleDashboard} style={styles.menuItem} accessibilityLabel="Toggle Dashboard menu">
-            <View style={styles.menuItemIcon}>
-              <Icon name="view-dashboard-outline" size={18} color={theme.colors.textSecondary} />
+            <LinearGradient
+              colors={
+                isDashboard
+                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.menuActiveGlow, !isDashboard && styles.menuActiveGlowHidden]}
+            />
+            <View style={[styles.menuActiveRail, isDashboard && styles.menuActiveRailOn]} />
+            <View style={[styles.menuItemIcon, isDashboard && styles.menuItemIconActive]}>
+              <Icon
+                name="view-dashboard-outline"
+                size={18}
+                color={isDashboard ? theme.colors.blue2 : theme.colors.textSecondary}
+              />
             </View>
-            <Text style={styles.menuItemText}>Dashboard</Text>
+            <Text style={[styles.menuItemText, isDashboard && styles.menuItemTextActive]}>Dashboard</Text>
             <View style={{ flex: 1 }} />
-            <Icon name={dashOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textMuted} />
+            {isDashboard ? (
+              <Icon name={dashOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.blue} />
+            ) : null}
           </Pressable>
 
-          {/* Children */}
-          {dashOpen && (
+          {dashOpen && isDashboard && (
             <View style={styles.menuChildrenWrap}>
               <MenuChildItem label="Summary" icon="chart-box-outline" onPress={onPressSummary} />
               <View style={styles.menuDividerChild} />
@@ -328,22 +305,80 @@ function MenuDrawer({
               <MenuChildItem label="Consumption" icon="chart-timeline-variant" onPress={onPressConsumption} />
             </View>
           )}
+
+          <View style={styles.menuDividerTop} />
+
+          <Pressable
+            onPress={onPressBrowseView}
+            style={[styles.menuItem, isBrowseActive && styles.menuItemActive]}
+            accessibilityLabel={`Open ${browseLabel}`}
+          >
+            <LinearGradient
+              colors={
+                isBrowseActive
+                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.menuActiveGlow, !isBrowseActive && styles.menuActiveGlowHidden]}
+            />
+            <View style={[styles.menuActiveRail, isBrowseActive && styles.menuActiveRailOn]} />
+            <View style={[styles.menuItemIcon, isBrowseActive && styles.menuItemIconActive]}>
+              <Icon
+                name={browseIcon}
+                size={18}
+                color={isBrowseActive ? theme.colors.blue2 : theme.colors.textSecondary}
+              />
+            </View>
+            <Text style={[styles.menuItemText, isBrowseActive && styles.menuItemTextActive]}>{browseLabel}</Text>
+            <View style={{ flex: 1 }} />
+            <Pressable
+              onPress={onToggleBrowseMode}
+              hitSlop={10}
+              style={styles.modeSwitchBtn}
+              accessibilityLabel="Toggle browse mode"
+            >
+              <LinearGradient
+                colors={['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.modeSwitchGlow}
+              />
+              <Icon name="autorenew" size={18} color={theme.colors.blue} />
+            </Pressable>
+          </Pressable>
+
+          <View style={styles.menuDividerTop} />
+
+          <Pressable
+            onPress={onPressGasSensors}
+            style={[styles.menuItem, isGasSensors && styles.menuItemActive]}
+            accessibilityLabel="Open Gas Sensor Monitoring"
+          >
+            <LinearGradient
+              colors={
+                isGasSensors
+                  ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
+                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.menuActiveGlow, !isGasSensors && styles.menuActiveGlowHidden]}
+            />
+            <View style={[styles.menuActiveRail, isGasSensors && styles.menuActiveRailOn]} />
+            <View style={[styles.menuItemIcon, isGasSensors && styles.menuItemIconActive]}>
+              <Icon
+                name="cctv"
+                size={18}
+                color={isGasSensors ? theme.colors.blue2 : theme.colors.textSecondary}
+              />
+            </View>
+            <Text style={[styles.menuItemText, isGasSensors && styles.menuItemTextActive]}>Gas Sensor Monitoring</Text>
+          </Pressable>
         </View>
       </Animated.View>
     </View>
-  );
-}
-
-function MenuItem({ label, icon, onPress }) {
-  return (
-    <Pressable onPress={onPress} style={styles.menuItem}>
-      <View style={styles.menuItemIcon}>
-        <Icon name={icon} size={18} color={theme.colors.textSecondary} />
-      </View>
-      <Text style={styles.menuItemText}>{label}</Text>
-      <View style={{ flex: 1 }} />
-      <Icon name="chevron-right" size={18} color={theme.colors.textMuted} />
-    </Pressable>
   );
 }
 
@@ -393,7 +428,6 @@ function ModalShell({ visible, onRequestClose, title, subtitle, children, right 
             </View>
           </View>
 
-          {/* Scrollable modal content */}
           <ScrollView
             style={styles.modalBody}
             contentContainerStyle={{ paddingBottom: 6 }}
@@ -424,7 +458,6 @@ function SummaryModal({ visible, onClose, summary, devices }) {
 
   return (
     <ModalShell visible={visible} onRequestClose={onClose} title="Summary">
-      {/* NEW: Total Gas panel */}
       <LinearGradient
         colors={['rgba(214,235,255,0.62)', 'rgba(255,255,255,0.46)']}
         start={{ x: 0, y: 0 }}
@@ -689,6 +722,7 @@ export default function Dashboard({ navigation }) {
   const insets = useSafeAreaInsets();
   const pollRef = useRef(null);
   const sheetRef = useRef(null);
+  const { viewMode, toggleViewMode } = useViewMode();
 
   const [devices, setDevices] = useState([]);
   const [selectedTerminalId, setSelectedTerminalId] = useState(null);
@@ -706,7 +740,7 @@ export default function Dashboard({ navigation }) {
   const [consumptionOpen, setConsumptionOpen] = useState(false);
 
   const [consumptionDetailsOpen, setConsumptionDetailsOpen] = useState(false);
-  const [consumptionDetails, setConsumptionDetails] = useState(null); // { row, device }
+  const [consumptionDetails, setConsumptionDetails] = useState(null);
 
   const selectedDevice = useMemo(() => {
     if (!selectedTerminalId) return null;
@@ -759,10 +793,8 @@ export default function Dashboard({ navigation }) {
         lpg_min_level: i?.lpg_min_level ?? null,
         lpg_max_level: i?.lpg_max_level ?? null,
 
-        // NEW: needed for Total Gas Available (Liters)
         lpg_tank_capacity: i?.lpg_tank_capacity || '',
 
-        // New fields requested (from tank-info table)
         afg_bld_code: i?.afg_bld_code || '',
         client_bld_code: i?.client_bld_code || '',
         lpg_tank_type: i?.lpg_tank_type || '',
@@ -854,7 +886,6 @@ export default function Dashboard({ navigation }) {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const summary = useMemo(() => {
@@ -923,9 +954,9 @@ export default function Dashboard({ navigation }) {
     setConsumptionOpen(true);
   }
 
-  function openListViewFromMenu() {
+  function openBrowseViewFromMenu() {
     closeAllOverlays();
-    navigation.navigate('ListView');
+    navigation.navigate(viewMode === 'command' ? 'CommandView' : 'ListView');
   }
 
   function openGasSensorsFromMenu() {
@@ -933,14 +964,16 @@ export default function Dashboard({ navigation }) {
     navigation.navigate('GasSensors');
   }
 
-  const mapHeight = Math.min(520, Math.max(360, Math.round(Dimensions.get('window').height * 0.42)));
+  function handleToggleBrowseMode() {
+    toggleViewMode();
+  }
 
+  const mapHeight = Math.min(520, Math.max(360, Math.round(Dimensions.get('window').height * 0.42)));
   const heroH = Math.max(230, Math.round(Dimensions.get('window').height * 0.26));
   const headerTopPad = Math.max(12, insets.top + 10);
 
   return (
     <LinearGradient colors={[theme.colors.bgA, theme.colors.bgB]} style={styles.screen}>
-      {/* Hero background (luxury cool blues + ivory) */}
       <View style={[styles.heroBg, { height: heroH }]} pointerEvents="none">
         <LinearGradient
           colors={['rgba(214,235,255,0.80)', 'rgba(255,255,255,0.35)', 'rgba(255,255,255,0.00)']}
@@ -949,34 +982,22 @@ export default function Dashboard({ navigation }) {
           end={{ x: 0.85, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-
-        {/* soft highlight orb */}
         <View style={styles.heroOrbA} />
         <View style={styles.heroOrbB} />
-
-        {/* subtle bottom separator */}
         <View style={styles.heroDivider} />
       </View>
 
-      {/* Drawer must be above ScrollView and above WebView (OsmMap) */}
       <MenuDrawer
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        onPressListView={() => {
-          openListViewFromMenu();
-        }}
-        onPressGasSensors={() => {
-          openGasSensorsFromMenu();
-        }}
-        onPressSummary={() => {
-          openSummaryFromMenu();
-        }}
-        onPressDevices={() => {
-          openDevicesFromMenu();
-        }}
-        onPressConsumption={() => {
-          openConsumptionFromMenu();
-        }}
+        onPressBrowseView={openBrowseViewFromMenu}
+        onPressGasSensors={openGasSensorsFromMenu}
+        onPressSummary={openSummaryFromMenu}
+        onPressDevices={openDevicesFromMenu}
+        onPressConsumption={openConsumptionFromMenu}
+        onToggleBrowseMode={handleToggleBrowseMode}
+        currentRoute="Dashboard"
+        viewMode={viewMode}
       />
 
       <ScrollView
@@ -990,67 +1011,87 @@ export default function Dashboard({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         keyboardShouldPersistTaps="handled"
       >
-        {/* HERO HEADER (redesigned) */}
-        <View style={{ marginBottom: 12 }}>
-          <WowCard
-            stroke={'rgba(15,23,42,0.10)'}
-            gradient={['rgba(255,255,255,0.78)', 'rgba(255,255,255,0.56)']}
-            style={styles.heroHeaderCard}
-          >
-            <View style={styles.heroHeaderClip}>
-              {!!BlurView && (
-                <BlurView
+        <View style={{ marginBottom: 14 }}>
+          <View style={styles.heroShell}>
+            <LinearGradient
+              colors={['rgba(255,255,255,0.84)', 'rgba(255,255,255,0.56)', 'rgba(246,248,251,0.40)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroFrame}
+            >
+              <View style={styles.heroTopLine} />
+              <View style={styles.heroCornerOrb} />
+              <View style={styles.heroLowerGlow} />
+
+              <View style={styles.heroInner}>
+                {!!BlurView && (
+                  <BlurView
+                    style={StyleSheet.absoluteFill}
+                    blurType="light"
+                    blurAmount={18}
+                    reducedTransparencyFallbackColor="rgba(255,255,255,0.76)"
+                  />
+                )}
+
+                <LinearGradient
+                  colors={[
+                    'rgba(214,235,255,0.28)',
+                    'rgba(255,255,255,0.18)',
+                    'rgba(255,255,255,0.04)',
+                  ]}
+                  locations={[0, 0.55, 1]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
-                  blurType="light"
-                  blurAmount={18}
-                  reducedTransparencyFallbackColor="rgba(255,255,255,0.70)"
+                  pointerEvents="none"
                 />
-              )}
 
-              {/* Glass sheen overlay (keeps premium look even without blur) */}
-              <LinearGradient
-                colors={['rgba(214,235,255,0.22)', 'rgba(255,255,255,0.18)', 'rgba(255,255,255,0.06)']}
-                locations={[0, 0.55, 1]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
+                <LinearGradient
+                  colors={[
+                    'rgba(255,255,255,0.50)',
+                    'rgba(255,255,255,0.08)',
+                    'rgba(255,255,255,0.00)',
+                  ]}
+                  locations={[0, 0.36, 1]}
+                  start={{ x: 0.05, y: 0 }}
+                  end={{ x: 0.9, y: 1 }}
+                  style={styles.heroSheen}
+                  pointerEvents="none"
+                />
 
-              {/* Top row: menu pill - title/subtitle - refresh pill */}
-              <View style={styles.heroTopRow}>
-                <Pressable
-                  onPress={() => setMenuOpen(true)}
-                  style={styles.heroIconPill}
-                  accessibilityLabel="Open menu"
-                  hitSlop={10}
-                >
-                  <Icon name="menu" size={20} color={theme.colors.textSecondary} />
-                </Pressable>
+                <View style={styles.heroPlateBorder}>
+                  <View style={styles.heroTopRow}>
+                    <Pressable
+                      onPress={() => setMenuOpen(true)}
+                      style={styles.heroIconPill}
+                      accessibilityLabel="Open menu"
+                      hitSlop={10}
+                    >
+                      <LinearGradient
+                        colors={['rgba(255,255,255,0.66)', 'rgba(214,235,255,0.22)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <Icon name="menu" size={20} color={theme.colors.textSecondary} />
+                    </Pressable>
 
-                <View style={styles.heroTitleWrap}>
-                  <Text style={styles.heroTitle}>Dashboard</Text>
-                  <Text style={styles.heroSubtitle}>Last updated • {lastUpdated || '—'}</Text>
+                    <View style={styles.heroTitleWrap}>
+                      <Text style={styles.heroTitle}>Dashboard</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.heroBottomRule} />
+
+                  <View style={styles.heroChipsRow}>
+                    <HeaderChip label="Online" value={summary.online} tone="good" />
+                    <HeaderChip label="Alerts" value={summary.alerts} tone={summary.alerts > 0 ? 'danger' : 'neutral'} />
+                    <HeaderChip label="Offline" value={summary.offline} tone="muted" />
+                  </View>
                 </View>
-
-                <Pressable
-                  onPress={onRefresh}
-                  style={[styles.heroIconPill, styles.heroIconPillBlue]}
-                  accessibilityLabel="Refresh dashboard"
-                  hitSlop={10}
-                >
-                  <Icon name="refresh" size={20} color={theme.colors.blue} />
-                </Pressable>
               </View>
-
-              {/* Chips row */}
-              <View style={styles.heroChipsRow}>
-                <HeaderChip label="Online" value={summary.online} tone="good" />
-                <HeaderChip label="Alerts" value={summary.alerts} tone={summary.alerts > 0 ? 'danger' : 'neutral'} />
-                <HeaderChip label="Offline" value={summary.offline} tone="muted" />
-              </View>
-            </View>
-          </WowCard>
+            </LinearGradient>
+          </View>
         </View>
 
         {!!error && (
@@ -1064,7 +1105,6 @@ export default function Dashboard({ navigation }) {
           </WowCard>
         )}
 
-        {/* MAP */}
         <WowCard
           stroke={theme.colors.stroke2}
           gradient={['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.70)']}
@@ -1106,7 +1146,6 @@ export default function Dashboard({ navigation }) {
           </View>
         </WowCard>
 
-        {/* ALERTS (vertical list) */}
         <WowCard gradient={['rgba(255,255,255,0.92)', 'rgba(255,255,255,0.70)']} style={styles.panel}>
           <SectionHeader
             title="Alerts"
@@ -1134,15 +1173,17 @@ export default function Dashboard({ navigation }) {
                         <Icon name="alarm-light-outline" size={20} color={theme.colors.red} />
                       </View>
 
-                      <View style={{ flex: 1, paddingRight: 10 }}>
-                        <Text style={styles.alertDeviceName} numberOfLines={0}>
-                          {deviceName(d)}
-                        </Text>
-                      </View>
+                      <View style={styles.alertContent}>
+                        <View style={styles.alertTextWrap}>
+                          <Text style={styles.alertDeviceName} numberOfLines={2}>
+                            {deviceName(d)}
+                          </Text>
+                        </View>
 
-                      <View style={{ alignItems: 'flex-end', gap: 8 }}>
-                        <StatusPill type={st} text={label} />
-                        <Icon name="chevron-right" size={18} color={theme.colors.textMuted} />
+                        <View style={styles.alertRight}>
+                          <StatusPill type={st} text={label} />
+                          <Icon name="chevron-right" size={18} color={theme.colors.textMuted} />
+                        </View>
                       </View>
                     </Pressable>
 
@@ -1157,7 +1198,6 @@ export default function Dashboard({ navigation }) {
         <View style={{ height: 10 }} />
       </ScrollView>
 
-      {/* Modals opened from Menu */}
       <SummaryModal visible={summaryOpen} onClose={() => setSummaryOpen(false)} summary={summary} devices={devices} />
 
       <DevicesModal
@@ -1167,7 +1207,6 @@ export default function Dashboard({ navigation }) {
         loading={loadingFirst}
         onSync={() => fullLoad({ keepSelection: true }).catch(() => {})}
         onSelectDevice={(d) => {
-          // Best UX: close modal then open sheet (avoids stacked overlays on iOS)
           setDevicesOpen(false);
           requestAnimationFrame(() => onSelectDevice(d, { openSheet: true }));
         }}
@@ -1193,7 +1232,6 @@ export default function Dashboard({ navigation }) {
         row={consumptionDetails?.row || null}
       />
 
-      {/* Bottom sheet remains global */}
       <DeviceBottomSheet
         sheetRef={sheetRef}
         device={selectedDevice}
@@ -1215,12 +1253,9 @@ function LegendDot({ color, label }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-
   content: { paddingHorizontal: 16 },
-
   panel: { marginBottom: 12 },
 
-  /* HERO BACKGROUND */
   heroBg: {
     position: 'absolute',
     left: 0,
@@ -1255,15 +1290,72 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15,23,42,0.06)',
   },
 
-  /* HERO HEADER PLATE */
-  heroHeaderCard: {
-    borderRadius: theme.radius.xl,
+  heroShell: {
+    borderRadius: 30,
+    shadowColor: '#0B1220',
+    shadowOpacity: 0.14,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 16 },
+    elevation: 10,
   },
-  heroHeaderClip: {
-    borderRadius: theme.radius.xl,
+  heroFrame: {
+    borderRadius: 30,
+    padding: 1,
     overflow: 'hidden',
-    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.56)',
   },
+  heroTopLine: {
+    position: 'absolute',
+    top: 0,
+    left: 22,
+    right: 22,
+    height: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.70)',
+    zIndex: 4,
+  },
+  heroCornerOrb: {
+    position: 'absolute',
+    top: -18,
+    right: -10,
+    width: 130,
+    height: 130,
+    borderRadius: 130,
+    backgroundColor: 'rgba(214,235,255,0.42)',
+    zIndex: 0,
+  },
+  heroLowerGlow: {
+    position: 'absolute',
+    bottom: -30,
+    left: -8,
+    width: 150,
+    height: 90,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    opacity: 0.42,
+    zIndex: 0,
+  },
+  heroInner: {
+    borderRadius: 29,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.46)',
+  },
+  heroSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '78%',
+  },
+  heroPlateBorder: {
+    borderRadius: 29,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.06)',
+    padding: 15,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1274,40 +1366,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   heroTitle: {
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 23,
+    lineHeight: 28,
     fontWeight: '900',
     color: theme.colors.text,
-    letterSpacing: 0.2,
+    letterSpacing: 0.24,
   },
-  heroSubtitle: {
-    marginTop: 6,
-    fontSize: 13,
-    lineHeight: 18,
-    fontWeight: '700',
-    color: theme.colors.textMuted,
+  heroBottomRule: {
+    marginTop: 14,
+    marginBottom: 14,
+    height: 1,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15,23,42,0.08)',
   },
 
   heroIconPill: {
-    width: 46,
-    height: 46,
+    width: 48,
+    height: 48,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(15,23,42,0.10)',
     backgroundColor: 'rgba(255,255,255,0.62)',
     alignItems: 'center',
     justifyContent: 'center',
-    ...theme.shadow.soft,
-  },
-  heroIconPillBlue: {
-    backgroundColor: 'rgba(214,235,255,0.56)',
-    borderColor: 'rgba(22,119,200,0.14)',
+    overflow: 'hidden',
+    shadowColor: '#0B1220',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
 
   heroChipsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 14,
   },
   hChip: {
     flex: 1,
@@ -1333,7 +1425,6 @@ const styles = StyleSheet.create({
     opacity: 0.95,
   },
 
-  /* Drawer menu (must be above WebView / Leaflet) */
   drawerRoot: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9999,
@@ -1390,18 +1481,45 @@ const styles = StyleSheet.create({
   drawerList: {
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: theme.colors.stroke,
+    borderColor: 'rgba(15,23,42,0.08)',
     backgroundColor: 'rgba(255,255,255,0.72)',
     overflow: 'hidden',
   },
 
   menuItem: {
+    position: 'relative',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    minHeight: 52,
+    minHeight: 54,
+    overflow: 'hidden',
+  },
+  menuItemActive: {
+    backgroundColor: 'rgba(214,235,255,0.08)',
+  },
+  menuActiveGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 18,
+  },
+  menuActiveGlowHidden: {
+    opacity: 0,
+  },
+  menuActiveRail: {
+    width: 3,
+    alignSelf: 'stretch',
+    borderRadius: 999,
+    backgroundColor: 'transparent',
+    marginRight: 2,
+  },
+  menuActiveRailOn: {
+    backgroundColor: '#29B6FF',
+    shadowColor: '#29B6FF',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 2,
   },
   menuItemIcon: {
     width: 34,
@@ -1413,11 +1531,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  menuItemIconActive: {
+    borderColor: 'rgba(41,182,255,0.24)',
+    backgroundColor: 'rgba(214,235,255,0.52)',
+    shadowColor: '#29B6FF',
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
   menuItemText: {
     fontWeight: '900',
     fontSize: 14,
     lineHeight: 20,
     color: theme.colors.text,
+    flexShrink: 1,
+  },
+  menuItemTextActive: {
+    color: '#0B4E8A',
+    letterSpacing: 0.15,
   },
 
   menuDividerTop: {
@@ -1427,7 +1559,6 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 
-  // Children indentation
   menuChildrenWrap: {
     paddingLeft: 12,
     paddingRight: 0,
@@ -1476,8 +1607,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  modeSwitchBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(41,182,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  modeSwitchGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
 
-  /* Section headers */
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1487,7 +1630,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 16, lineHeight: 22, fontWeight: '900', color: theme.colors.text },
 
-  /* Map */
   mapWrap: {
     borderRadius: theme.radius.lg,
     overflow: 'hidden',
@@ -1510,7 +1652,6 @@ const styles = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 10 },
   legendText: { fontSize: 12, lineHeight: 16, fontWeight: '900', color: theme.colors.textMuted },
 
-  /* Alerts */
   alertCount: { fontSize: 12, lineHeight: 16, fontWeight: '900' },
 
   listCard: {
@@ -1523,7 +1664,7 @@ const styles = StyleSheet.create({
 
   alertRowV2: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     alignItems: 'center',
     padding: 12,
   },
@@ -1536,15 +1677,34 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(254,242,242,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+  },
+  alertContent: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  alertTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 4,
   },
   alertDeviceName: {
     fontWeight: '900',
     color: theme.colors.text,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 13,
+    lineHeight: 18,
+    flexShrink: 1,
+  },
+  alertRight: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    gap: 6,
+    maxWidth: 150,
   },
 
-  /* Shared rows */
   itemTitle: { fontWeight: '900', color: theme.colors.text, marginBottom: 4, fontSize: 15, lineHeight: 22 },
   itemMeta: { color: theme.colors.textMuted, fontWeight: '700', fontSize: 13, lineHeight: 18 },
 
@@ -1567,7 +1727,6 @@ const styles = StyleSheet.create({
   errTitle: { color: theme.colors.red, fontWeight: '900', marginBottom: 6, fontSize: 15, lineHeight: 22 },
   errText: { color: theme.colors.textMuted, fontWeight: '700', fontSize: 13, lineHeight: 18 },
 
-  /* Modals */
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15,23,42,0.22)',
@@ -1668,7 +1827,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
 
-  /* Devices modal list rows (compact + dividers) */
   deviceRowCompact: {
     flexDirection: 'row',
     gap: 12,
@@ -1683,7 +1841,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 
-  /* Consumption */
   consumptionRow: {
     flexDirection: 'row',
     gap: 12,
@@ -1691,7 +1848,6 @@ const styles = StyleSheet.create({
     padding: 12,
   },
 
-  // NEW: Total Gas panel styles (used in Summary modal)
   totalGasCard: {
     borderRadius: theme.radius.xl,
     borderWidth: 1,
