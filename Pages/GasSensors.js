@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing, Image } from 'react-native'
 import LinearGradient from 'react-native-linear-gradient'
 import io from 'socket.io-client'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -318,7 +318,7 @@ export default function GasSensors({ navigation }) {
         <View style={{ marginBottom: 14 }}>
           <View style={styles.heroShell}>
             <LinearGradient
-              colors={['rgba(255,255,255,0.84)', 'rgba(255,255,255,0.56)', 'rgba(246,248,251,0.40)']}
+              colors={['rgba(255,255,255,0.88)', 'rgba(255,255,255,0.60)', 'rgba(246,248,251,0.42)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroFrame}
@@ -326,15 +326,17 @@ export default function GasSensors({ navigation }) {
               <View style={styles.heroTopLine} />
               <View style={styles.heroCornerOrb} />
               <View style={styles.heroLowerGlow} />
+              <View style={styles.heroBlueBeam} />
+              <View style={styles.heroGreenBeam} />
 
               <View style={styles.heroInner}>
                 <LinearGradient
                   colors={[
-                    'rgba(214,235,255,0.28)',
-                    'rgba(255,255,255,0.18)',
-                    'rgba(255,255,255,0.04)',
+                    'rgba(80,220,255,0.14)',
+                    'rgba(170,255,120,0.10)',
+                    'rgba(255,255,255,0.05)',
                   ]}
-                  locations={[0, 0.55, 1]}
+                  locations={[0, 0.48, 1]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
@@ -356,18 +358,38 @@ export default function GasSensors({ navigation }) {
 
                 <View style={styles.heroPlateBorder}>
                   <View style={styles.heroTopRow}>
-                    <Pressable onPress={() => setMenuOpen(true)} style={styles.heroIconPill} accessibilityLabel="Open menu" hitSlop={10}>
+                    <View style={styles.heroLeftBlock}>
+                      <Pressable onPress={() => setMenuOpen(true)} style={styles.heroIconPill} accessibilityLabel="Open menu" hitSlop={10}>
+                        <LinearGradient
+                          colors={['rgba(255,255,255,0.74)', 'rgba(214,235,255,0.24)']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={StyleSheet.absoluteFill}
+                        />
+                        <Icon name="menu" size={22} color={theme.colors.textSecondary} />
+                      </Pressable>
+
+                      <View style={styles.heroTitleWrap}>
+                        <Text style={styles.title}>Gas Sensor Monitoring</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.heroLogoWrap}>
+                      <View style={styles.heroLogoHaloOuter} />
+                      <View style={styles.heroLogoHaloInner} />
                       <LinearGradient
-                        colors={['rgba(255,255,255,0.66)', 'rgba(214,235,255,0.22)']}
+                        colors={['rgba(255,255,255,0.42)', 'rgba(214,235,255,0.18)', 'rgba(236,253,243,0.14)']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
-                      <Icon name="menu" size={22} color={theme.colors.textSecondary} />
-                    </Pressable>
-
-                    <View style={styles.heroTitleWrap}>
-                      <Text style={styles.title}>Gas Sensor Monitoring</Text>
+                        style={styles.heroLogoGlass}
+                      >
+                        <View style={styles.heroLogoRing} />
+                        <Image
+                          source={require('../Components/Static/ALFLogo2.png')}
+                          style={styles.headerLogo}
+                          resizeMode="contain"
+                        />
+                      </LinearGradient>
                     </View>
                   </View>
 
@@ -455,7 +477,7 @@ const styles = StyleSheet.create({
     right: 22,
     height: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.70)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     zIndex: 4,
   },
   heroCornerOrb: {
@@ -465,7 +487,7 @@ const styles = StyleSheet.create({
     width: 130,
     height: 130,
     borderRadius: 130,
-    backgroundColor: 'rgba(214,235,255,0.42)',
+    backgroundColor: 'rgba(214,235,255,0.38)',
     zIndex: 0,
   },
   heroLowerGlow: {
@@ -478,6 +500,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.55)',
     opacity: 0.42,
     zIndex: 0,
+  },
+  heroBlueBeam: {
+    position: 'absolute',
+    right: 52,
+    top: 18,
+    width: 120,
+    height: 120,
+    borderRadius: 120,
+    backgroundColor: 'rgba(41,182,255,0.12)',
+  },
+  heroGreenBeam: {
+    position: 'absolute',
+    right: 26,
+    top: 10,
+    width: 92,
+    height: 92,
+    borderRadius: 92,
+    backgroundColor: 'rgba(130,255,80,0.12)',
   },
   heroInner: {
     borderRadius: 29,
@@ -498,8 +538,24 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
-  heroTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  heroTitleWrap: { flex: 1, paddingHorizontal: 2 },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  heroLeftBlock: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  heroTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 2,
+    paddingRight: 6,
+  },
   heroBottomRule: {
     marginTop: 14,
     height: 1,
@@ -509,7 +565,7 @@ const styles = StyleSheet.create({
   heroIconPill: {
     width: 48,
     height: 48,
-    borderRadius: 999,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(15,23,42,0.10)',
     backgroundColor: 'rgba(255,255,255,0.62)',
@@ -521,14 +577,67 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
     elevation: 6,
+    flexShrink: 0,
   },
 
   title:{
-    fontSize:23,
-    lineHeight: 28,
+    marginTop: 1,
+    fontSize: 20,
+    lineHeight: 24,
     fontWeight:'900',
     color:theme.colors.text,
-    letterSpacing: 0.24,
+    letterSpacing: 0.12,
+    flexShrink: 1,
+  },
+  heroLogoWrap: {
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    flexShrink: 0,
+  },
+  heroLogoHaloOuter: {
+    position: 'absolute',
+    width: 94,
+    height: 94,
+    borderRadius: 94,
+    backgroundColor: 'rgba(41,182,255,0.18)',
+    transform: [{ scale: 1.06 }],
+  },
+  heroLogoHaloInner: {
+    position: 'absolute',
+    width: 76,
+    height: 76,
+    borderRadius: 76,
+    backgroundColor: 'rgba(130,255,80,0.16)',
+    transform: [{ translateX: 4 }, { translateY: -4 }],
+  },
+  heroLogoGlass: {
+    width: 88,
+    height: 88,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.44)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#29B6FF',
+    shadowOpacity: 0.20,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  heroLogoRing: {
+    position: 'absolute',
+    inset: 6,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: 'rgba(41,182,255,0.18)',
+  },
+  headerLogo: {
+    width: 78,
+    height: 78,
   },
 
   card:{

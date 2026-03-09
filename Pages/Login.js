@@ -183,6 +183,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 18,
+    paddingBottom: '45%',
     gap: 14,
   },
 

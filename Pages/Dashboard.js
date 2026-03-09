@@ -11,6 +11,7 @@ import {
   Platform,
   Animated,
   Easing,
+  Image,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -976,7 +977,7 @@ export default function Dashboard({ navigation }) {
     <LinearGradient colors={[theme.colors.bgA, theme.colors.bgB]} style={styles.screen}>
       <View style={[styles.heroBg, { height: heroH }]} pointerEvents="none">
         <LinearGradient
-          colors={['rgba(214,235,255,0.80)', 'rgba(255,255,255,0.35)', 'rgba(255,255,255,0.00)']}
+          colors={['rgba(214,235,255,0.84)', 'rgba(255,255,255,0.35)', 'rgba(255,255,255,0.00)']}
           locations={[0, 0.62, 1]}
           start={{ x: 0.15, y: 0 }}
           end={{ x: 0.85, y: 1 }}
@@ -984,6 +985,7 @@ export default function Dashboard({ navigation }) {
         />
         <View style={styles.heroOrbA} />
         <View style={styles.heroOrbB} />
+        <View style={styles.heroOrbC} />
         <View style={styles.heroDivider} />
       </View>
 
@@ -1014,7 +1016,7 @@ export default function Dashboard({ navigation }) {
         <View style={{ marginBottom: 14 }}>
           <View style={styles.heroShell}>
             <LinearGradient
-              colors={['rgba(255,255,255,0.84)', 'rgba(255,255,255,0.56)', 'rgba(246,248,251,0.40)']}
+              colors={['rgba(255,255,255,0.88)', 'rgba(255,255,255,0.60)', 'rgba(246,248,251,0.42)']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.heroFrame}
@@ -1022,24 +1024,26 @@ export default function Dashboard({ navigation }) {
               <View style={styles.heroTopLine} />
               <View style={styles.heroCornerOrb} />
               <View style={styles.heroLowerGlow} />
+              <View style={styles.heroBlueBeam} />
+              <View style={styles.heroGreenBeam} />
 
               <View style={styles.heroInner}>
                 {!!BlurView && (
                   <BlurView
                     style={StyleSheet.absoluteFill}
                     blurType="light"
-                    blurAmount={18}
-                    reducedTransparencyFallbackColor="rgba(255,255,255,0.76)"
+                    blurAmount={16}
+                    reducedTransparencyFallbackColor="rgba(255,255,255,0.78)"
                   />
                 )}
 
                 <LinearGradient
                   colors={[
-                    'rgba(214,235,255,0.28)',
-                    'rgba(255,255,255,0.18)',
-                    'rgba(255,255,255,0.04)',
+                    'rgba(80,220,255,0.14)',
+                    'rgba(170,255,120,0.10)',
+                    'rgba(255,255,255,0.05)',
                   ]}
-                  locations={[0, 0.55, 1]}
+                  locations={[0, 0.48, 1]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
@@ -1061,23 +1065,43 @@ export default function Dashboard({ navigation }) {
 
                 <View style={styles.heroPlateBorder}>
                   <View style={styles.heroTopRow}>
-                    <Pressable
-                      onPress={() => setMenuOpen(true)}
-                      style={styles.heroIconPill}
-                      accessibilityLabel="Open menu"
-                      hitSlop={10}
-                    >
+                    <View style={styles.heroLeftBlock}>
+                      <Pressable
+                        onPress={() => setMenuOpen(true)}
+                        style={styles.heroIconPill}
+                        accessibilityLabel="Open menu"
+                        hitSlop={10}
+                      >
+                        <LinearGradient
+                          colors={['rgba(255,255,255,0.74)', 'rgba(214,235,255,0.24)']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={StyleSheet.absoluteFill}
+                        />
+                        <Icon name="menu" size={20} color={theme.colors.textSecondary} />
+                      </Pressable>
+
+                      <View style={styles.heroTitleWrap}>
+                        <Text style={styles.heroTitle}>Dashboard</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.heroLogoWrap}>
+                      <View style={styles.heroLogoHaloOuter} />
+                      <View style={styles.heroLogoHaloInner} />
                       <LinearGradient
-                        colors={['rgba(255,255,255,0.66)', 'rgba(214,235,255,0.22)']}
+                        colors={['rgba(255,255,255,0.42)', 'rgba(214,235,255,0.18)', 'rgba(236,253,243,0.14)']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={StyleSheet.absoluteFill}
-                      />
-                      <Icon name="menu" size={20} color={theme.colors.textSecondary} />
-                    </Pressable>
-
-                    <View style={styles.heroTitleWrap}>
-                      <Text style={styles.heroTitle}>Dashboard</Text>
+                        style={styles.heroLogoGlass}
+                      >
+                        <View style={styles.heroLogoRing} />
+                        <Image
+                          source={require('../Components/Static/ALFLogo2.png')}
+                          style={styles.headerLogo}
+                          resizeMode="contain"
+                        />
+                      </LinearGradient>
                     </View>
                   </View>
 
@@ -1281,6 +1305,15 @@ const styles = StyleSheet.create({
     top: 84,
     backgroundColor: 'rgba(22,119,200,0.12)',
   },
+  heroOrbC: {
+    position: 'absolute',
+    width: 170,
+    height: 170,
+    borderRadius: 170,
+    right: 48,
+    top: 18,
+    backgroundColor: 'rgba(130,255,80,0.10)',
+  },
   heroDivider: {
     position: 'absolute',
     left: 16,
@@ -1312,7 +1345,7 @@ const styles = StyleSheet.create({
     right: 22,
     height: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.70)',
+    backgroundColor: 'rgba(255,255,255,0.78)',
     zIndex: 4,
   },
   heroCornerOrb: {
@@ -1322,7 +1355,7 @@ const styles = StyleSheet.create({
     width: 130,
     height: 130,
     borderRadius: 130,
-    backgroundColor: 'rgba(214,235,255,0.42)',
+    backgroundColor: 'rgba(214,235,255,0.38)',
     zIndex: 0,
   },
   heroLowerGlow: {
@@ -1335,6 +1368,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.55)',
     opacity: 0.42,
     zIndex: 0,
+  },
+  heroBlueBeam: {
+    position: 'absolute',
+    right: 52,
+    top: 18,
+    width: 120,
+    height: 120,
+    borderRadius: 120,
+    backgroundColor: 'rgba(41,182,255,0.12)',
+  },
+  heroGreenBeam: {
+    position: 'absolute',
+    right: 26,
+    top: 10,
+    width: 92,
+    height: 92,
+    borderRadius: 92,
+    backgroundColor: 'rgba(130,255,80,0.12)',
   },
   heroInner: {
     borderRadius: 29,
@@ -1361,16 +1412,75 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  heroLeftBlock: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   heroTitleWrap: {
     flex: 1,
+    minWidth: 0,
     paddingHorizontal: 2,
   },
   heroTitle: {
+    marginTop: 3,
     fontSize: 23,
     lineHeight: 28,
     fontWeight: '900',
     color: theme.colors.text,
     letterSpacing: 0.24,
+  },
+
+  heroLogoWrap: {
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  heroLogoHaloOuter: {
+    position: 'absolute',
+    width: 94,
+    height: 94,
+    borderRadius: 94,
+    backgroundColor: 'rgba(41,182,255,0.18)',
+    transform: [{ scale: 1.06 }],
+  },
+  heroLogoHaloInner: {
+    position: 'absolute',
+    width: 76,
+    height: 76,
+    borderRadius: 76,
+    backgroundColor: 'rgba(130,255,80,0.16)',
+    transform: [{ translateX: 4 }, { translateY: -4 }],
+  },
+  heroLogoGlass: {
+    width: 88,
+    height: 88,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.44)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#29B6FF',
+    shadowOpacity: 0.20,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  heroLogoRing: {
+    position: 'absolute',
+    inset: 6,
+    borderRadius: 19,
+    borderWidth: 1,
+    borderColor: 'rgba(41,182,255,0.18)',
+  },
+  headerLogo: {
+    width: 78,
+    height: 78,
   },
   heroBottomRule: {
     marginTop: 14,
@@ -1383,7 +1493,7 @@ const styles = StyleSheet.create({
   heroIconPill: {
     width: 48,
     height: 48,
-    borderRadius: 999,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(15,23,42,0.10)',
     backgroundColor: 'rgba(255,255,255,0.62)',
