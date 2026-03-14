@@ -13,10 +13,21 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import { theme } from '../Components/theme';
 import { Icon } from '../Components/icons';
+import { api } from '../Components/api';
+import { useAuthState } from '../App';
 
-const BASE_URL = 'https://gaslevel-alfanar.soniciot.com';
+function firstAllowedRoute(permissions) {
+  if (permissions?.perm_dashboard_access) return 'Dashboard';
+  if (permissions?.perm_grid_view_access) return 'ListView';
+  if (permissions?.perm_command_view_access) return 'CommandView';
+  if (permissions?.perm_gas_sensors_access) return 'GasSensors';
+  if (permissions?.perm_document_tracker_access) return 'DocumentTracker';
+  if (permissions?.perm_account_management_access && permissions?.perm_account_create) return 'AccountCreator';
+  return 'Login';
+}
 
 export default function Login({ navigation }) {
+  const { setAuthUser, setPermissions, resetAuth } = useAuthState();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -40,26 +51,30 @@ export default function Login({ navigation }) {
     setError('');
 
     try {
-      const resp = await fetch(`${BASE_URL}/api/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: u, password: p }),
+      const json = await api.login(u, p);
+      const perms = json?.permissions || {};
+
+      setAuthUser({
+        username: json.username || u,
+        role: json.role || '',
       });
+      setPermissions(perms);
 
-      const json = await resp.json().catch(() => ({}));
-
-      if (!resp.ok || !json.ok) {
-        setError(json.error || 'Invalid username or password.');
+      const nextRoute = firstAllowedRoute(perms);
+      if (nextRoute === 'Login') {
+        resetAuth();
+        setError('Your account does not have access to any mobile modules.');
         setPassword('');
         return;
       }
 
-      navigation.replace('Dashboard', {
+      navigation.replace(nextRoute, {
         username: json.username || u,
         role: json.role || '',
       });
     } catch (e) {
-      setError('Login failed. Please try again.');
+      setError(e?.message || 'Login failed. Please try again.');
+      setPassword('');
     } finally {
       setSubmitting(false);
     }

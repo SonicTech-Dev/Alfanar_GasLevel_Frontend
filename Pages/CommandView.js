@@ -9,6 +9,7 @@ import {
   Animated,
   Easing,
   Image,
+  ScrollView,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,7 +21,7 @@ import { SkeletonBlock } from '../Components/Skeleton';
 import { Icon } from '../Components/icons';
 import DeviceBottomSheet from '../Components/DeviceBottomSheet';
 import StatusPill from '../Components/StatusPill';
-import { useViewMode } from '../App';
+import { useAuthState, useViewMode } from '../App';
 
 const POLL_INTERVAL_MS = 30000;
 
@@ -142,12 +143,16 @@ function MenuDrawer({
   onPressDashboard,
   onPressBrowseView,
   onPressGasSensors,
+  onPressDocumentTracker,
+  onPressAccountCreator,
   onToggleBrowseMode,
   currentRoute = 'CommandView',
   viewMode = 'command',
+  permissions = {},
 }) {
   const insets = useSafeAreaInsets();
   const slide = useRef(new Animated.Value(0)).current;
+  const [accountOpen, setAccountOpen] = useState(currentRoute === 'AccountCreator');
 
   useEffect(() => {
     Animated.timing(slide, {
@@ -156,7 +161,9 @@ function MenuDrawer({
       easing: open ? Easing.out(Easing.cubic) : Easing.in(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [open, slide]);
+
+    if (open && currentRoute === 'AccountCreator') setAccountOpen(true);
+  }, [open, slide, currentRoute]);
 
   const pointerEvents = open ? 'auto' : 'none';
   const panelW = 292;
@@ -171,6 +178,10 @@ function MenuDrawer({
     outputRange: [0, 1],
   });
 
+  const canGrid = !!permissions?.perm_grid_view_access;
+  const canCommand = !!permissions?.perm_command_view_access;
+  const canToggleBrowseMode = canGrid && canCommand;
+
   const browseLabel = viewMode === 'command' ? 'Command View' : 'Grid View';
   const browseIcon = viewMode === 'command' ? 'cards-outline' : 'view-comfy';
 
@@ -179,6 +190,15 @@ function MenuDrawer({
   const isGridView = currentRoute === 'ListView';
   const isBrowseActive = isCommandView || isGridView;
   const isGasSensors = currentRoute === 'GasSensors';
+  const isDocumentTracker = currentRoute === 'DocumentTracker';
+  const isAccountCreator = currentRoute === 'AccountCreator';
+
+  const canDashboard = !!permissions?.perm_dashboard_access;
+  const canBrowse = canGrid || canCommand;
+  const canGasSensors = !!permissions?.perm_gas_sensors_access;
+  const canDocumentTracker = !!permissions?.perm_document_tracker_access;
+  const canSeeAccount = !!permissions?.perm_account_management_access;
+  const canCreateAccount = !!permissions?.perm_account_create;
 
   return (
     <View style={styles.drawerRoot} pointerEvents={pointerEvents}>
@@ -212,102 +232,194 @@ function MenuDrawer({
         <View style={{ height: 10 }} />
 
         <View style={styles.drawerList}>
-          <Pressable
-            onPress={onPressDashboard}
-            style={[styles.menuItem, isDashboard && styles.menuItemActive]}
-            accessibilityLabel="Open Dashboard"
-          >
-            <LinearGradient
-              colors={
-                isDashboard
-                  ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
-                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.menuActiveGlow, !isDashboard && styles.menuActiveGlowHidden]}
-            />
-            <View style={[styles.menuActiveRail, isDashboard && styles.menuActiveRailOn]} />
-            <View style={[styles.menuItemIcon, isDashboard && styles.menuItemIconActive]}>
-              <Icon
-                name="view-dashboard-outline"
-                size={18}
-                color={isDashboard ? ACCENTS.normal.strong : theme.colors.textSecondary}
-              />
-            </View>
-            <Text style={[styles.menuItemText, isDashboard && styles.menuItemTextActive]}>Dashboard</Text>
-          </Pressable>
+          {canDashboard && (
+            <>
+              <Pressable
+                onPress={onPressDashboard}
+                style={[styles.menuItem, isDashboard && styles.menuItemActive]}
+                accessibilityLabel="Open Dashboard"
+              >
+                <LinearGradient
+                  colors={
+                    isDashboard
+                      ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
+                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.menuActiveGlow, !isDashboard && styles.menuActiveGlowHidden]}
+                />
+                <View style={[styles.menuActiveRail, isDashboard && styles.menuActiveRailOn]} />
+                <View style={[styles.menuItemIcon, isDashboard && styles.menuItemIconActive]}>
+                  <Icon
+                    name="view-dashboard-outline"
+                    size={18}
+                    color={isDashboard ? ACCENTS.normal.strong : theme.colors.textSecondary}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, isDashboard && styles.menuItemTextActive]}>Dashboard</Text>
+              </Pressable>
 
-          <View style={styles.menuDividerTop} />
+              <View style={styles.menuDividerTop} />
+            </>
+          )}
 
-          <Pressable
-            onPress={onPressBrowseView}
-            style={[styles.menuItem, isBrowseActive && styles.menuItemActive]}
-            accessibilityLabel={`Open ${browseLabel}`}
-          >
-            <LinearGradient
-              colors={
-                isBrowseActive
-                  ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
-                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.menuActiveGlow, !isBrowseActive && styles.menuActiveGlowHidden]}
-            />
-            <View style={[styles.menuActiveRail, isBrowseActive && styles.menuActiveRailOn]} />
-            <View style={[styles.menuItemIcon, isBrowseActive && styles.menuItemIconActive]}>
-              <Icon
-                name={browseIcon}
-                size={18}
-                color={isBrowseActive ? ACCENTS.normal.strong : theme.colors.textSecondary}
-              />
-            </View>
-            <Text style={[styles.menuItemText, isBrowseActive && styles.menuItemTextActive]}>{browseLabel}</Text>
-            <View style={{ flex: 1 }} />
-            <Pressable
-              onPress={onToggleBrowseMode}
-              hitSlop={10}
-              style={styles.modeSwitchBtn}
-              accessibilityLabel="Toggle browse mode"
-            >
-              <LinearGradient
-                colors={['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.14)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.modeSwitchGlow}
-              />
-              <Icon name="autorenew" size={18} color={ACCENTS.normal.strong} />
-            </Pressable>
-          </Pressable>
+          {canBrowse && (
+            <>
+              <Pressable
+                onPress={onPressBrowseView}
+                style={[styles.menuItem, isBrowseActive && styles.menuItemActive]}
+                accessibilityLabel={`Open ${browseLabel}`}
+              >
+                <LinearGradient
+                  colors={
+                    isBrowseActive
+                      ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
+                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.menuActiveGlow, !isBrowseActive && styles.menuActiveGlowHidden]}
+                />
+                <View style={[styles.menuActiveRail, isBrowseActive && styles.menuActiveRailOn]} />
+                <View style={[styles.menuItemIcon, isBrowseActive && styles.menuItemIconActive]}>
+                  <Icon
+                    name={browseIcon}
+                    size={18}
+                    color={isBrowseActive ? ACCENTS.normal.strong : theme.colors.textSecondary}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, isBrowseActive && styles.menuItemTextActive]}>{browseLabel}</Text>
+                <View style={{ flex: 1 }} />
+                {canToggleBrowseMode && (
+                  <Pressable
+                    onPress={onToggleBrowseMode}
+                    hitSlop={10}
+                    style={styles.modeSwitchBtn}
+                    accessibilityLabel="Toggle browse mode"
+                  >
+                    <LinearGradient
+                      colors={['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.14)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.modeSwitchGlow}
+                    />
+                    <Icon name="autorenew" size={18} color={ACCENTS.normal.strong} />
+                  </Pressable>
+                )}
+              </Pressable>
 
-          <View style={styles.menuDividerTop} />
+              <View style={styles.menuDividerTop} />
+            </>
+          )}
 
-          <Pressable
-            onPress={onPressGasSensors}
-            style={[styles.menuItem, isGasSensors && styles.menuItemActive]}
-            accessibilityLabel="Open Gas Sensor Monitoring"
-          >
-            <LinearGradient
-              colors={
-                isGasSensors
-                  ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
-                  : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.menuActiveGlow, !isGasSensors && styles.menuActiveGlowHidden]}
-            />
-            <View style={[styles.menuActiveRail, isGasSensors && styles.menuActiveRailOn]} />
-            <View style={[styles.menuItemIcon, isGasSensors && styles.menuItemIconActive]}>
-              <Icon
-                name="cctv"
-                size={18}
-                color={isGasSensors ? ACCENTS.normal.strong : theme.colors.textSecondary}
-              />
-            </View>
-            <Text style={[styles.menuItemText, isGasSensors && styles.menuItemTextActive]}>Gas Sensor Monitoring</Text>
-          </Pressable>
+          {canGasSensors && (
+            <>
+              <Pressable
+                onPress={onPressGasSensors}
+                style={[styles.menuItem, isGasSensors && styles.menuItemActive]}
+                accessibilityLabel="Open Gas Sensor Monitoring"
+              >
+                <LinearGradient
+                  colors={
+                    isGasSensors
+                      ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
+                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.menuActiveGlow, !isGasSensors && styles.menuActiveGlowHidden]}
+                />
+                <View style={[styles.menuActiveRail, isGasSensors && styles.menuActiveRailOn]} />
+                <View style={[styles.menuItemIcon, isGasSensors && styles.menuItemIconActive]}>
+                  <Icon
+                    name="cctv"
+                    size={18}
+                    color={isGasSensors ? ACCENTS.normal.strong : theme.colors.textSecondary}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, isGasSensors && styles.menuItemTextActive]}>Gas Sensor Monitoring</Text>
+              </Pressable>
+
+              <View style={styles.menuDividerTop} />
+            </>
+          )}
+
+          {canDocumentTracker && (
+            <>
+              <Pressable
+                onPress={onPressDocumentTracker}
+                style={[styles.menuItem, isDocumentTracker && styles.menuItemActive]}
+                accessibilityLabel="Open Document Tracker"
+              >
+                <LinearGradient
+                  colors={
+                    isDocumentTracker
+                      ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
+                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.menuActiveGlow, !isDocumentTracker && styles.menuActiveGlowHidden]}
+                />
+                <View style={[styles.menuActiveRail, isDocumentTracker && styles.menuActiveRailOn]} />
+                <View style={[styles.menuItemIcon, isDocumentTracker && styles.menuItemIconActive]}>
+                  <Icon
+                    name="file-document-multiple-outline"
+                    size={18}
+                    color={isDocumentTracker ? ACCENTS.normal.strong : theme.colors.textSecondary}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, isDocumentTracker && styles.menuItemTextActive]}>Document Tracker</Text>
+              </Pressable>
+            </>
+          )}
+
+          {canSeeAccount && (
+            <>
+              <View style={styles.menuDividerTop} />
+              <Pressable
+                onPress={() => setAccountOpen((v) => !v)}
+                style={[styles.menuItem, isAccountCreator && styles.menuItemActive]}
+                accessibilityLabel="Account Management section"
+              >
+                <LinearGradient
+                  colors={
+                    isAccountCreator
+                      ? ['rgba(34,197,94,0.18)', 'rgba(236,253,243,0.10)', 'rgba(255,255,255,0.04)']
+                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.menuActiveGlow, !isAccountCreator && styles.menuActiveGlowHidden]}
+                />
+                <View style={[styles.menuActiveRail, isAccountCreator && styles.menuActiveRailOn]} />
+                <View style={[styles.menuItemIcon, isAccountCreator && styles.menuItemIconActive]}>
+                  <Icon
+                    name="account-cog-outline"
+                    size={18}
+                    color={isAccountCreator ? ACCENTS.normal.strong : theme.colors.textSecondary}
+                  />
+                </View>
+                <Text style={[styles.menuItemText, isAccountCreator && styles.menuItemTextActive]}>Account Management</Text>
+                <View style={{ flex: 1 }} />
+                <Icon name={accountOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textMuted} />
+              </Pressable>
+
+              {accountOpen && canCreateAccount && (
+                <View style={styles.menuChildrenWrap}>
+                  <Pressable onPress={onPressAccountCreator} style={styles.menuChildItem}>
+                    <View style={styles.menuChildBullet}>
+                      <Icon name="account-plus-outline" size={16} color={theme.colors.textSecondary} />
+                    </View>
+                    <Text style={styles.menuChildText}>Account Creator</Text>
+                    <View style={{ flex: 1 }} />
+                    <Icon name="chevron-right" size={18} color={theme.colors.textMuted} />
+                  </Pressable>
+                </View>
+              )}
+            </>
+          )}
         </View>
       </Animated.View>
     </View>
@@ -376,6 +488,7 @@ export default function CommandView({ navigation }) {
   const pollRef = useRef(null);
   const sheetRef = useRef(null);
   const { viewMode, setViewMode, toggleViewMode } = useViewMode();
+  const { permissions } = useAuthState();
 
   const [devices, setDevices] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -385,6 +498,8 @@ export default function CommandView({ navigation }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const [selectedTerminalId, setSelectedTerminalId] = useState(null);
+
+  const canAccess = !!permissions?.perm_command_view_access;
 
   const selectedDevice = useMemo(() => {
     if (!selectedTerminalId) return null;
@@ -479,6 +594,8 @@ export default function CommandView({ navigation }) {
   }, [setViewMode]);
 
   useEffect(() => {
+    if (!canAccess) return undefined;
+
     (async () => {
       try {
         setLoadingFirst(true);
@@ -504,7 +621,7 @@ export default function CommandView({ navigation }) {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, []);
+  }, [canAccess]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -532,6 +649,19 @@ export default function CommandView({ navigation }) {
   const headerTopPad = Math.max(12, insets.top + 10);
   const listBottomPad = Math.max(24, insets.bottom + 24) + 100;
 
+  if (!canAccess) {
+    return (
+      <LinearGradient colors={[theme.colors.bgA, theme.colors.bgB]} style={styles.screen}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingTop: headerTopPad, paddingBottom: 28 }]}>
+          <WowCard>
+            <Text style={styles.errTitle}>Access denied</Text>
+            <Text style={styles.errText}>Your account does not have permission to access Command View.</Text>
+          </WowCard>
+        </ScrollView>
+      </LinearGradient>
+    );
+  }
+
   return (
     <LinearGradient colors={[theme.colors.bgA, theme.colors.bgB]} style={styles.screen}>
       <MenuDrawer
@@ -548,9 +678,18 @@ export default function CommandView({ navigation }) {
           setMenuOpen(false);
           navigation.navigate('GasSensors');
         }}
+        onPressDocumentTracker={() => {
+          setMenuOpen(false);
+          navigation.navigate('DocumentTracker');
+        }}
+        onPressAccountCreator={() => {
+          setMenuOpen(false);
+          navigation.navigate('AccountCreator');
+        }}
         onToggleBrowseMode={handleToggleBrowseMode}
         currentRoute="CommandView"
         viewMode={viewMode}
+        permissions={permissions || {}}
       />
 
       <View style={[styles.content, { paddingTop: headerTopPad, paddingBottom: Math.max(40, insets.bottom + 40) }]}>
@@ -1145,6 +1284,36 @@ const styles = StyleSheet.create({
   },
   modeSwitchGlow: {
     ...StyleSheet.absoluteFillObject,
+  },
+  menuChildrenWrap: {
+    paddingLeft: 12,
+    paddingBottom: 6,
+    backgroundColor: 'rgba(255,255,255,0.45)',
+  },
+  menuChildItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingLeft: 12,
+    paddingRight: 12,
+    paddingVertical: 10,
+    minHeight: 48,
+  },
+  menuChildBullet: {
+    width: 30,
+    height: 30,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.stroke,
+    backgroundColor: 'rgba(255,255,255,0.70)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuChildText: {
+    fontWeight: '900',
+    fontSize: 13,
+    lineHeight: 18,
+    color: theme.colors.text,
   },
 
   commandShell: {

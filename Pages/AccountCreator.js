@@ -1,7 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Animated, Easing, Image } from 'react-native';
+import React, { useState } from 'react';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+  Animated,
+  Easing,
+  Image,
+} from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
-import io from 'socket.io-client';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { api } from '../Components/api';
@@ -9,6 +20,65 @@ import { theme } from '../Components/theme';
 import WowCard from '../Components/WowCard';
 import { Icon } from '../Components/icons';
 import { useAuthState, useViewMode } from '../App';
+
+const FIXED_ROLE = 'viewer';
+
+const PERMISSION_GROUPS = [
+  {
+    title: 'General Access',
+    main: null,
+    items: [
+      ['perm_grid_view_access', 'Grid View'],
+      ['perm_command_view_access', 'Command View'],
+      ['perm_gas_sensors_access', 'Gas Sensor Monitoring'],
+    ],
+  },
+  {
+    title: 'Dashboard Permissions',
+    main: ['perm_dashboard_access', 'Dashboard'],
+    items: [
+      ['perm_dashboard_summary_access', 'Dashboard Summary'],
+      ['perm_dashboard_devices_access', 'Dashboard Devices'],
+      ['perm_dashboard_consumption_access', 'Dashboard Consumption'],
+    ],
+  },
+  {
+    title: 'Document Tracker Permissions',
+    main: ['perm_document_tracker_access', 'Document Tracker'],
+    items: [
+      ['perm_doc_create_site', 'Create Site'],
+      ['perm_doc_edit_site_metadata', 'Edit Site Metadata'],
+      ['perm_doc_delete_site', 'Delete Site'],
+      ['perm_doc_import', 'Import'],
+      ['perm_doc_export', 'Export'],
+      ['perm_doc_manage_istifaa', 'Manage ISTIFAA'],
+      ['perm_doc_manage_amc', 'Manage AMC'],
+      ['perm_doc_manage_doe_noc', 'Manage DOE NOC'],
+      ['perm_doc_manage_coc', 'Manage COC'],
+      ['perm_doc_manage_tpi', 'Manage TPI'],
+    ],
+  },
+  {
+    title: 'Account Permissions',
+    main: ['perm_account_management_access', 'Account Management'],
+    items: [
+      ['perm_account_create', 'Account Creator'],
+    ],
+  },
+];
+
+function emptyPermissions() {
+  const out = {};
+  PERMISSION_GROUPS.forEach((group) => {
+    if (group.main) {
+      out[group.main[0]] = false;
+    }
+    group.items.forEach(([key]) => {
+      out[key] = false;
+    });
+  });
+  return out;
+}
 
 function MenuDrawer({
   open,
@@ -19,15 +89,15 @@ function MenuDrawer({
   onPressDocumentTracker,
   onPressAccountCreator,
   onToggleBrowseMode,
-  currentRoute = 'GasSensors',
+  currentRoute = 'AccountCreator',
   viewMode = 'grid',
   permissions = {},
 }) {
   const insets = useSafeAreaInsets();
-  const slide = useRef(new Animated.Value(0)).current;
+  const slide = React.useRef(new Animated.Value(0)).current;
   const [accountOpen, setAccountOpen] = useState(currentRoute === 'AccountCreator');
 
-  useEffect(() => {
+  React.useEffect(() => {
     Animated.timing(slide, {
       toValue: open ? 1 : 0,
       duration: open ? 220 : 180,
@@ -65,13 +135,7 @@ function MenuDrawer({
   const isGasSensors = currentRoute === 'GasSensors';
   const isDocumentTracker = currentRoute === 'DocumentTracker';
   const isAccountCreator = currentRoute === 'AccountCreator';
-
-  const canDashboard = !!permissions?.perm_dashboard_access;
-  const canBrowse = canGrid || canCommand;
-  const canGasSensors = !!permissions?.perm_gas_sensors_access;
-  const canDocumentTracker = !!permissions?.perm_document_tracker_access;
   const canSeeAccount = !!permissions?.perm_account_management_access;
-  const canCreateAccount = !!permissions?.perm_account_create;
 
   return (
     <View style={styles.drawerRoot} pointerEvents={pointerEvents}>
@@ -105,72 +169,28 @@ function MenuDrawer({
         <View style={{ height: 10 }} />
 
         <View style={styles.drawerList}>
-          {canDashboard && (
+          {!!permissions?.perm_dashboard_access && (
             <>
-              <Pressable
-                onPress={onPressDashboard}
-                style={[styles.menuItem, isDashboard && styles.menuItemActive]}
-                accessibilityLabel="Open Dashboard"
-              >
-                <LinearGradient
-                  colors={
-                    isDashboard
-                      ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
-                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.menuActiveGlow, !isDashboard && styles.menuActiveGlowHidden]}
-                />
-                <View style={[styles.menuActiveRail, isDashboard && styles.menuActiveRailOn]} />
+              <Pressable onPress={onPressDashboard} style={[styles.menuItem, isDashboard && styles.menuItemActive]}>
                 <View style={[styles.menuItemIcon, isDashboard && styles.menuItemIconActive]}>
-                  <Icon
-                    name="view-dashboard-outline"
-                    size={18}
-                    color={isDashboard ? theme.colors.blue2 : theme.colors.textSecondary}
-                  />
+                  <Icon name="view-dashboard-outline" size={18} color={isDashboard ? theme.colors.blue2 : theme.colors.textSecondary} />
                 </View>
                 <Text style={[styles.menuItemText, isDashboard && styles.menuItemTextActive]}>Dashboard</Text>
               </Pressable>
-
               <View style={styles.menuDividerTop} />
             </>
           )}
 
-          {canBrowse && (
+          {(canGrid || canCommand) && (
             <>
-              <Pressable
-                onPress={onPressBrowseView}
-                style={[styles.menuItem, isBrowseActive && styles.menuItemActive]}
-                accessibilityLabel={`Open ${browseLabel}`}
-              >
-                <LinearGradient
-                  colors={
-                    isBrowseActive
-                      ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
-                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.menuActiveGlow, !isBrowseActive && styles.menuActiveGlowHidden]}
-                />
-                <View style={[styles.menuActiveRail, isBrowseActive && styles.menuActiveRailOn]} />
+              <Pressable onPress={onPressBrowseView} style={[styles.menuItem, isBrowseActive && styles.menuItemActive]}>
                 <View style={[styles.menuItemIcon, isBrowseActive && styles.menuItemIconActive]}>
-                  <Icon
-                    name={browseIcon}
-                    size={18}
-                    color={isBrowseActive ? theme.colors.blue2 : theme.colors.textSecondary}
-                  />
+                  <Icon name={browseIcon} size={18} color={isBrowseActive ? theme.colors.blue2 : theme.colors.textSecondary} />
                 </View>
                 <Text style={[styles.menuItemText, isBrowseActive && styles.menuItemTextActive]}>{browseLabel}</Text>
                 <View style={{ flex: 1 }} />
                 {canToggleBrowseMode && (
-                  <Pressable
-                    onPress={onToggleBrowseMode}
-                    hitSlop={10}
-                    style={styles.modeSwitchBtn}
-                    accessibilityLabel="Toggle browse mode"
-                  >
+                  <Pressable onPress={onToggleBrowseMode} hitSlop={10} style={styles.modeSwitchBtn}>
                     <LinearGradient
                       colors={['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)']}
                       start={{ x: 0, y: 0 }}
@@ -181,67 +201,27 @@ function MenuDrawer({
                   </Pressable>
                 )}
               </Pressable>
-
               <View style={styles.menuDividerTop} />
             </>
           )}
 
-          {canGasSensors && (
+          {!!permissions?.perm_gas_sensors_access && (
             <>
-              <Pressable
-                onPress={onPressGasSensors}
-                style={[styles.menuItem, isGasSensors && styles.menuItemActive]}
-                accessibilityLabel="Open Gas Sensor Monitoring"
-              >
-                <LinearGradient
-                  colors={
-                    isGasSensors
-                      ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
-                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.menuActiveGlow, !isGasSensors && styles.menuActiveGlowHidden]}
-                />
-                <View style={[styles.menuActiveRail, isGasSensors && styles.menuActiveRailOn]} />
+              <Pressable onPress={onPressGasSensors} style={[styles.menuItem, isGasSensors && styles.menuItemActive]}>
                 <View style={[styles.menuItemIcon, isGasSensors && styles.menuItemIconActive]}>
-                  <Icon
-                    name="cctv"
-                    size={18}
-                    color={isGasSensors ? theme.colors.blue2 : theme.colors.textSecondary}
-                  />
+                  <Icon name="cctv" size={18} color={isGasSensors ? theme.colors.blue2 : theme.colors.textSecondary} />
                 </View>
                 <Text style={[styles.menuItemText, isGasSensors && styles.menuItemTextActive]}>Gas Sensor Monitoring</Text>
               </Pressable>
-
               <View style={styles.menuDividerTop} />
             </>
           )}
 
-          {canDocumentTracker && (
+          {!!permissions?.perm_document_tracker_access && (
             <>
-              <Pressable
-                onPress={onPressDocumentTracker}
-                style={[styles.menuItem, isDocumentTracker && styles.menuItemActive]}
-                accessibilityLabel="Open Document Tracker"
-              >
-                <LinearGradient
-                  colors={
-                    isDocumentTracker
-                      ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
-                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.menuActiveGlow, !isDocumentTracker && styles.menuActiveGlowHidden]}
-                />
-                <View style={[styles.menuActiveRail, isDocumentTracker && styles.menuActiveRailOn]} />
+              <Pressable onPress={onPressDocumentTracker} style={[styles.menuItem, isDocumentTracker && styles.menuItemActive]}>
                 <View style={[styles.menuItemIcon, isDocumentTracker && styles.menuItemIconActive]}>
-                  <Icon
-                    name="file-document-multiple-outline"
-                    size={18}
-                    color={isDocumentTracker ? theme.colors.blue2 : theme.colors.textSecondary}
-                  />
+                  <Icon name="file-document-multiple-outline" size={18} color={isDocumentTracker ? theme.colors.blue2 : theme.colors.textSecondary} />
                 </View>
                 <Text style={[styles.menuItemText, isDocumentTracker && styles.menuItemTextActive]}>Document Tracker</Text>
               </Pressable>
@@ -254,40 +234,22 @@ function MenuDrawer({
               <Pressable
                 onPress={() => setAccountOpen((v) => !v)}
                 style={[styles.menuItem, isAccountCreator && styles.menuItemActive]}
-                accessibilityLabel="Account Management section"
               >
-                <LinearGradient
-                  colors={
-                    isAccountCreator
-                      ? ['rgba(41,182,255,0.18)', 'rgba(214,235,255,0.10)', 'rgba(255,255,255,0.04)']
-                      : ['rgba(255,255,255,0)', 'rgba(255,255,255,0)']
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={[styles.menuActiveGlow, !isAccountCreator && styles.menuActiveGlowHidden]}
-                />
-                <View style={[styles.menuActiveRail, isAccountCreator && styles.menuActiveRailOn]} />
                 <View style={[styles.menuItemIcon, isAccountCreator && styles.menuItemIconActive]}>
-                  <Icon
-                    name="account-cog-outline"
-                    size={18}
-                    color={isAccountCreator ? theme.colors.blue2 : theme.colors.textSecondary}
-                  />
+                  <Icon name="account-cog-outline" size={18} color={isAccountCreator ? theme.colors.blue2 : theme.colors.textSecondary} />
                 </View>
                 <Text style={[styles.menuItemText, isAccountCreator && styles.menuItemTextActive]}>Account Management</Text>
                 <View style={{ flex: 1 }} />
                 <Icon name={accountOpen ? 'chevron-up' : 'chevron-down'} size={18} color={theme.colors.textMuted} />
               </Pressable>
 
-              {accountOpen && canCreateAccount && (
+              {accountOpen && !!permissions?.perm_account_create && (
                 <View style={styles.menuChildrenWrap}>
                   <Pressable onPress={onPressAccountCreator} style={styles.menuChildItem}>
                     <View style={styles.menuChildBullet}>
                       <Icon name="account-plus-outline" size={16} color={theme.colors.textSecondary} />
                     </View>
                     <Text style={styles.menuChildText}>Account Creator</Text>
-                    <View style={{ flex: 1 }} />
-                    <Icon name="chevron-right" size={18} color={theme.colors.textMuted} />
                   </Pressable>
                 </View>
               )}
@@ -299,107 +261,109 @@ function MenuDrawer({
   );
 }
 
-export default function GasSensors({ navigation }) {
+function PermissionSwitch({ label, value, onValueChange, compact = false, last = false }) {
+  return (
+    <View style={[styles.switchRow, compact && styles.switchRowCompact, last && styles.switchRowLast]}>
+      <Text style={[styles.switchLabel, compact && styles.switchLabelCompact]}>{label}</Text>
+      <Switch
+        value={!!value}
+        onValueChange={onValueChange}
+        trackColor={{ false: 'rgba(148,163,184,0.35)', true: 'rgba(41,182,255,0.42)' }}
+        thumbColor={value ? theme.colors.blue : '#F8FAFC'}
+      />
+    </View>
+  );
+}
+
+function MainPermissionSwitch({ label, value, onValueChange }) {
+  return (
+    <LinearGradient
+      colors={['rgba(214,235,255,0.42)', 'rgba(255,255,255,0.80)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.mainSwitchShell}
+    >
+      <View style={styles.mainSwitchRow}>
+        <Text style={styles.mainSwitchLabel}>{label}</Text>
+        <Switch
+          value={!!value}
+          onValueChange={onValueChange}
+          trackColor={{ false: 'rgba(148,163,184,0.35)', true: 'rgba(41,182,255,0.42)' }}
+          thumbColor={value ? theme.colors.blue : '#F8FAFC'}
+        />
+      </View>
+    </LinearGradient>
+  );
+}
+
+function NestedPermissionGroup({ items, permState, setPerm }) {
+  return (
+    <View style={styles.nestedGroupWrap}>
+      <View style={styles.nestedGuideRail} />
+      <View style={styles.nestedGroupCard}>
+        {items.map(([key, label], idx) => (
+          <PermissionSwitch
+            key={key}
+            label={label}
+            value={permState[key]}
+            onValueChange={(v) => setPerm(key, v)}
+            compact
+            last={idx === items.length - 1}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export default function AccountCreator({ navigation }) {
   const insets = useSafeAreaInsets();
   const { viewMode, toggleViewMode } = useViewMode();
-  const { permissions } = useAuthState();
-  const [status, setStatus] = useState(null);
-  const [socketConnected, setSocketConnected] = useState(false);
-  const [error, setError] = useState('');
+  const { permissions, authUser } = useAuthState();
+
   const [menuOpen, setMenuOpen] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [permState, setPermState] = useState(emptyPermissions());
+  const [submitting, setSubmitting] = useState(false);
 
-  const socketRef = useRef(null);
-  const pollRef = useRef(null);
+  const canAccess = !!permissions?.perm_account_management_access && !!permissions?.perm_account_create;
 
-  const canAccess = !!permissions?.perm_gas_sensors_access;
+  function setPerm(key, value) {
+    setPermState((prev) => ({ ...prev, [key]: !!value }));
+  }
 
-  async function pollStatus() {
+  async function submit() {
+    if (!canAccess) {
+      Alert.alert('Forbidden', 'Your account cannot access Account Creator.');
+      return;
+    }
+
+    if (!username.trim() || !password) {
+      Alert.alert('Missing fields', 'Please enter username and password.');
+      return;
+    }
+
     try {
-      const json = await api.deviceStatus('230346');
-      setStatus(json);
-      setError('');
+      setSubmitting(true);
+      const payload = {
+        username: username.trim(),
+        password,
+        role: FIXED_ROLE,
+        ...permState,
+      };
+
+      const result = await api.createAccount(payload);
+      Alert.alert('Success', `Account ${result?.account?.username || username.trim()} created successfully.`);
+      setUsername('');
+      setPassword('');
+      setPermState(emptyPermissions());
     } catch (e) {
-      if (String(e.message).includes('401')) {
-        setError('Please login to view sensor status.');
-      } else {
-        setError('Unable to fetch sensor status.');
-      }
+      Alert.alert('Create failed', e?.message || 'Unknown error');
+    } finally {
+      setSubmitting(false);
     }
   }
-
-  function startPolling() {
-    if (pollRef.current) return;
-    pollStatus();
-    pollRef.current = setInterval(pollStatus, 10000);
-  }
-
-  function stopPolling() {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }
-
-  useEffect(() => {
-    if (!canAccess) return undefined;
-
-    const base = api.BASE_URL || 'https://gaslevel-alfanar.soniciot.com';
-
-    const socket = io(base, {
-      path: '/ws',
-      transports: ['websocket'],
-      withCredentials: true,
-    });
-
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      setSocketConnected(true);
-      stopPolling();
-    });
-
-    socket.on('disconnect', () => {
-      setSocketConnected(false);
-      startPolling();
-    });
-
-    socket.on('init', (map) => {
-      const data = map?.['230346'];
-      if (data) setStatus(data);
-    });
-
-    socket.on('status_update', (payload) => {
-      if (String(payload?.terminal_id) === '230346') {
-        setStatus(payload);
-      }
-    });
-
-    socket.on('connect_error', () => {
-      setSocketConnected(false);
-      startPolling();
-    });
-
-    return () => {
-      stopPolling();
-      socket.close();
-    };
-  }, [canAccess]);
-
-  const online = status?.panelOnline === true;
-  const lel = online ? status?.lel : null;
-
-  const solenoidOn = online && Number(lel) > 25;
-
-  const gasSensorText = online ? 'Online' : 'Offline';
-  const gasSensorColor = online ? theme.colors.green : theme.colors.red;
-
-  const solenoidText = !online ? '—' : solenoidOn ? 'On' : 'Off';
-  const solenoidColor = !online ? theme.colors.textMuted : solenoidOn ? theme.colors.red : theme.colors.green;
-
-  const lelNum = Number(lel);
-  const lelIsNumber = Number.isFinite(lelNum);
-  const lelText = !lelIsNumber ? 'N/A' : `${Math.round(lelNum)}%`;
-  const lelColor = !lelIsNumber ? theme.colors.textMuted : lelNum > 25 ? theme.colors.red : theme.colors.green;
 
   function handleToggleBrowseMode() {
     toggleViewMode();
@@ -410,9 +374,12 @@ export default function GasSensors({ navigation }) {
   if (!canAccess) {
     return (
       <LinearGradient colors={[theme.colors.bgA, theme.colors.bgB]} style={styles.screen}>
-        <ScrollView contentContainerStyle={[styles.wrap, { paddingTop: headerTopPad, paddingBottom: 28 }]}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingTop: headerTopPad, paddingBottom: 28 }]}>
           <WowCard>
-            <Text style={styles.error}>Your account does not have permission to access Gas Sensor Monitoring.</Text>
+            <Text style={styles.deniedTitle}>Access denied</Text>
+            <Text style={styles.deniedText}>
+              Your account does not have permission to access Account Creator.
+            </Text>
           </WowCard>
         </ScrollView>
       </LinearGradient>
@@ -434,6 +401,7 @@ export default function GasSensors({ navigation }) {
         }}
         onPressGasSensors={() => {
           setMenuOpen(false);
+          navigation.navigate('GasSensors');
         }}
         onPressDocumentTracker={() => {
           setMenuOpen(false);
@@ -441,15 +409,14 @@ export default function GasSensors({ navigation }) {
         }}
         onPressAccountCreator={() => {
           setMenuOpen(false);
-          navigation.navigate('AccountCreator');
         }}
         onToggleBrowseMode={handleToggleBrowseMode}
-        currentRoute="GasSensors"
+        currentRoute="AccountCreator"
         viewMode={viewMode}
         permissions={permissions || {}}
       />
 
-      <ScrollView contentContainerStyle={[styles.wrap, { paddingTop: headerTopPad, paddingBottom: 28 }]}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: headerTopPad, paddingBottom: 28 }]}>
         <View style={{ marginBottom: 14 }}>
           <View style={styles.heroShell}>
             <LinearGradient
@@ -505,7 +472,8 @@ export default function GasSensors({ navigation }) {
                       </Pressable>
 
                       <View style={styles.heroTitleWrap}>
-                        <Text style={styles.title}>Gas Sensor Monitoring</Text>
+                        <Text style={styles.heroTitle}>Account Creator</Text>
+                        <Text style={styles.heroSub}>Signed in as {authUser?.username || '—'}</Text>
                       </View>
                     </View>
 
@@ -535,57 +503,210 @@ export default function GasSensors({ navigation }) {
           </View>
         </View>
 
-        <WowCard style={styles.card}>
-          <Text style={styles.site}>Site name: Sonic Testing</Text>
+        <WowCard style={styles.panel}>
+          <Text style={styles.sectionTitle}>Account Details</Text>
 
-          <Row
-            label="Gas Sensor"
-            value={gasSensorText}
-            valueColor={gasSensorColor}
+          <View style={{ height: 12 }} />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Username"
+            placeholderTextColor={theme.colors.textMuted}
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+            autoCorrect={false}
           />
 
-          {online && (
-            <>
-              <Row
-                label="Solenoid"
-                value={solenoidText}
-                valueColor={solenoidColor}
-              />
-
-              <Row
-                label="LEL"
-                value={lelText}
-                valueColor={lelColor}
-              />
-            </>
-          )}
+          <TextInput
+            style={styles.input}
+            placeholder="Password"
+            placeholderTextColor={theme.colors.textMuted}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
         </WowCard>
 
-        {!!error && (
-          <Text style={styles.error}>{error}</Text>
-        )}
+        {PERMISSION_GROUPS.map((group) => (
+          <WowCard key={group.title} style={styles.panel}>
+            <Text style={styles.sectionTitle}>{group.title}</Text>
+            <View style={{ height: 12 }} />
+
+            {!!group.main ? (
+              <>
+                <MainPermissionSwitch
+                  label={group.main[1]}
+                  value={permState[group.main[0]]}
+                  onValueChange={(v) => setPerm(group.main[0], v)}
+                />
+                <View style={{ height: 10 }} />
+                <NestedPermissionGroup items={group.items} permState={permState} setPerm={setPerm} />
+              </>
+            ) : (
+              group.items.map(([key, label], idx) => (
+                <PermissionSwitch
+                  key={key}
+                  label={label}
+                  value={permState[key]}
+                  onValueChange={(v) => setPerm(key, v)}
+                  last={idx === group.items.length - 1}
+                />
+              ))
+            )}
+          </WowCard>
+        ))}
+
+        <Pressable style={[styles.submitBtn, submitting && { opacity: 0.6 }]} onPress={submit} disabled={submitting}>
+          <Icon name="account-plus-outline" size={20} color="#fff" />
+          <Text style={styles.submitBtnText}>{submitting ? 'Creating Account...' : 'Create Account'}</Text>
+        </Pressable>
       </ScrollView>
     </LinearGradient>
   );
 }
 
-function Row({ label, value, valueColor }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={[styles.value, valueColor ? { color: valueColor } : null]}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
+  screen: { flex: 1 },
+  content: { paddingHorizontal: 16 },
+
+  deniedTitle: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '900',
+    color: theme.colors.red,
+  },
+  deniedText: {
+    marginTop: 8,
+    color: theme.colors.textMuted,
+    fontWeight: '700',
+    fontSize: 14,
+    lineHeight: 20,
   },
 
-  wrap: {
-    padding: 20,
-    gap: 16,
+  panel: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '900',
+    color: theme.colors.text,
+  },
+
+  input: {
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.stroke,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: theme.colors.text,
+    fontWeight: '800',
+    fontSize: 15,
+    marginBottom: 10,
+  },
+
+  mainSwitchShell: {
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(41,182,255,0.28)',
+    overflow: 'hidden',
+    shadowColor: '#29B6FF',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
+  mainSwitchRow: {
+    minHeight: 58,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  mainSwitchLabel: {
+    flex: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '900',
+    color: theme.colors.text,
+  },
+
+  nestedGroupWrap: {
+    position: 'relative',
+    paddingLeft: 16,
+  },
+  nestedGuideRail: {
+    position: 'absolute',
+    left: 7,
+    top: 6,
+    bottom: 6,
+    width: 2,
+    borderRadius: 999,
+    backgroundColor: 'rgba(41,182,255,0.18)',
+  },
+  nestedGroupCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.06)',
+    backgroundColor: 'rgba(248,250,252,0.55)',
+    padding: 10,
+  },
+
+  switchRow: {
+    minHeight: 54,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.stroke,
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 12,
+  },
+  switchRowCompact: {
+    marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderColor: 'rgba(15,23,42,0.05)',
+  },
+  switchRowLast: {
+    marginBottom: 0,
+  },
+  switchLabel: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '800',
+    color: theme.colors.text,
+  },
+  switchLabelCompact: {
+    fontSize: 13.5,
+    color: theme.colors.textSecondary,
+  },
+
+  submitBtn: {
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: theme.colors.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+    ...theme.shadow.hard,
+  },
+  submitBtnText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 15,
+    lineHeight: 22,
   },
 
   heroShell: {
@@ -674,53 +795,34 @@ const styles = StyleSheet.create({
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   heroLeftBlock: {
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   heroTitleWrap: {
     flex: 1,
     minWidth: 0,
     paddingHorizontal: 2,
-    paddingRight: 6,
   },
-  heroBottomRule: {
-    marginTop: 14,
-    height: 1,
-    borderRadius: 999,
-    backgroundColor: 'rgba(15,23,42,0.08)',
-  },
-  heroIconPill: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(15,23,42,0.10)',
-    backgroundColor: 'rgba(255,255,255,0.62)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: '#0B1220',
-    shadowOpacity: 0.12,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
-    flexShrink: 0,
-  },
-
-  title: {
-    marginTop: 1,
-    fontSize: 20,
-    lineHeight: 24,
+  heroTitle: {
+    marginTop: 3,
+    fontSize: 23,
+    lineHeight: 28,
     fontWeight: '900',
     color: theme.colors.text,
-    letterSpacing: 0.12,
-    flexShrink: 1,
+    letterSpacing: 0.24,
+  },
+  heroSub: {
+    marginTop: 6,
+    color: theme.colors.textMuted,
+    fontWeight: '800',
+    fontSize: 13,
+    lineHeight: 18,
   },
   heroLogoWrap: {
     width: 96,
@@ -728,7 +830,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    flexShrink: 0,
   },
   heroLogoHaloOuter: {
     position: 'absolute',
@@ -772,37 +873,27 @@ const styles = StyleSheet.create({
     width: 78,
     height: 78,
   },
-
-  card: {
-    padding: 16,
+  heroBottomRule: {
+    marginTop: 14,
+    height: 1,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15,23,42,0.08)',
   },
-
-  site: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: theme.colors.text,
-    marginBottom: 14,
-  },
-
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-
-  label: {
-    fontWeight: '800',
-    color: theme.colors.textSecondary,
-  },
-
-  value: {
-    fontWeight: '900',
-    color: theme.colors.text,
-  },
-
-  error: {
-    color: theme.colors.red,
-    fontWeight: '700',
+  heroIconPill: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(15,23,42,0.10)',
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#0B1220',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 6,
   },
 
   drawerRoot: {
@@ -876,28 +967,6 @@ const styles = StyleSheet.create({
   menuItemActive: {
     backgroundColor: 'rgba(214,235,255,0.08)',
   },
-  menuActiveGlow: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 18,
-  },
-  menuActiveGlowHidden: {
-    opacity: 0,
-  },
-  menuActiveRail: {
-    width: 3,
-    alignSelf: 'stretch',
-    borderRadius: 999,
-    backgroundColor: 'transparent',
-    marginRight: 2,
-  },
-  menuActiveRailOn: {
-    backgroundColor: '#29B6FF',
-    shadowColor: '#29B6FF',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 2,
-  },
   menuItemIcon: {
     width: 34,
     height: 34,
@@ -911,11 +980,6 @@ const styles = StyleSheet.create({
   menuItemIconActive: {
     borderColor: 'rgba(41,182,255,0.24)',
     backgroundColor: 'rgba(214,235,255,0.52)',
-    shadowColor: '#29B6FF',
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
   },
   menuItemText: {
     fontWeight: '900',
